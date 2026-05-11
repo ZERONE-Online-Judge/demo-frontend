@@ -275,7 +275,17 @@ type AdminJudgeSubmissionEntry = {
   active_testcase_count: number;
 };
 type AdminJudgeDashboard = {
-  nodes: Array<{ judge_node_id: string; node_name: string; total_slots: number; free_slots: number; running_job_count: number; last_heartbeat_at: string; schedulable: boolean }>;
+  nodes: Array<{
+    judge_node_id: string;
+    node_name: string;
+    total_slots: number;
+    free_slots: number;
+    running_job_count: number;
+    last_heartbeat_at: string;
+    schedulable: boolean;
+    is_active: boolean;
+    heartbeat_age_seconds: number;
+  }>;
   queue: Array<{ judge_job_id: string; submission_id: string; contest_id: string; division_id: string; status: string; queue_position: number; assigned_node_id?: string | null; leased_at?: string | null; created_at: string }>;
 };
 type ApiState = {
@@ -288,7 +298,7 @@ type ApiState = {
   scoreboard: ScoreboardRow[];
   submissions: Submission[];
   judgeStatus?: JudgeStatus;
-  adminDashboard?: { contest_count: number; pending_jobs: number; mail_queue_pending: number; judge_node_count: number };
+  adminDashboard?: { contest_count: number; pending_jobs: number; mail_queue_pending: number; judge_node_count: number; active_judge_node_count?: number };
   error?: string;
 };
 type ParticipantSession = {
@@ -7282,7 +7292,12 @@ function AdminPage({
           <InfoCard icon={<Trophy />} title="대회" value={String(dashboard?.contest_count ?? 0)} detail="total contests" />
           <InfoCard icon={<Activity />} title="대기 job" value={String(dashboard?.pending_jobs ?? 0)} detail="pending" />
           <InfoCard icon={<Mail />} title="메일 큐" value={String(dashboard?.mail_queue_pending ?? 0)} detail="pending" />
-          <InfoCard icon={<Server />} title="채점 노드" value={String(dashboard?.judge_node_count ?? 0)} detail="registered" />
+          <InfoCard
+            icon={<Server />}
+            title="채점 노드"
+            value={`${dashboard?.active_judge_node_count ?? 0}/${dashboard?.judge_node_count ?? 0}`}
+            detail="active/registered"
+          />
         </section>
       )}
       {message && <p className="submitMessage error">{message}</p>}
@@ -7293,7 +7308,12 @@ function AdminPage({
           <button className="secondary" onClick={loadJudgeInspector}>새로고침</button>
         </div>
         <div className="summaryGrid">
-          <InfoCard icon={<Server />} title="채점 노드" value={String(judgeDashboard?.nodes.length ?? 0)} detail="registered" />
+          <InfoCard
+            icon={<Server />}
+            title="채점 노드"
+            value={`${(judgeDashboard?.nodes ?? []).filter((node) => node.is_active).length}/${judgeDashboard?.nodes.length ?? 0}`}
+            detail="active/registered"
+          />
           <InfoCard icon={<Activity />} title="큐" value={String(judgeDashboard?.queue.filter((job) => job.status === "pending").length ?? 0)} detail="pending" />
           <InfoCard icon={<PlayCircle />} title="실행 중" value={String(judgeDashboard?.queue.filter((job) => job.status === "running" || job.status === "assigned").length ?? 0)} detail="running/assigned" />
           <InfoCard icon={<Clock3 />} title="최근 기록" value={String(judgeEntries.length)} detail="latest submissions" />
@@ -7302,10 +7322,10 @@ function AdminPage({
           columns={["노드", "상태", "슬롯", "실행", "하트비트"]}
           rows={(judgeDashboard?.nodes ?? []).map((node) => [
             node.node_name,
-            node.schedulable ? "schedulable" : "paused",
+            node.is_active ? (node.schedulable ? "connected" : "paused") : "stale",
             `${node.free_slots}/${node.total_slots}`,
             String(node.running_job_count),
-            formatDate(node.last_heartbeat_at),
+            `${formatDate(node.last_heartbeat_at)} (${node.heartbeat_age_seconds}s)`,
           ])}
         />
         <DataTable
