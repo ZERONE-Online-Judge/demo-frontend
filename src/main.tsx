@@ -1186,7 +1186,7 @@ function useApiData(selectedContestId?: string): ApiState {
       } catch {
         // Keep the last visible judge status if a realtime refresh fails.
       }
-    }, 5000);
+    }, 1500);
     return () => {
       cancelled = true;
       window.clearInterval(judgeStatusTimer);
@@ -3233,7 +3233,7 @@ function ProblemPage({
       let judged = created;
       for (let attempt = 0; attempt < 24; attempt += 1) {
         judged = await apiRequest<Submission>(
-          `/contests/${contest.contest_id}/submissions/${created.submission_id}/status:wait?wait_seconds=2&poll_interval_seconds=0.25`,
+          `/contests/${contest.contest_id}/submissions/${created.submission_id}/status:wait?wait_seconds=1&poll_interval_seconds=0.1`,
           activeParticipant.accessToken
         );
         setLocalSubmission(judged);
@@ -3440,8 +3440,15 @@ function SubmissionsPage({
       }
     }
     loadSubmissions();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") loadSubmissions();
+    }, 1200);
+    const onFocus = () => loadSubmissions();
+    window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
     };
   }, [api.submissions, contest.contest_id, participant, staffSession?.accessToken]);
 
@@ -3614,7 +3621,7 @@ function ScoreboardPage({
         await loadOnce(2);
       }
       if (!cancelled && staffSession) {
-        const timer = window.setInterval(() => loadOnce(0), 2000);
+        const timer = window.setInterval(() => loadOnce(0), 1000);
         while (!cancelled) await new Promise((resolve) => window.setTimeout(resolve, 1000));
         window.clearInterval(timer);
       }
@@ -6437,7 +6444,7 @@ function OperatorProblemsPage({
       let latest = created;
       for (let i = 0; i < 40; i += 1) {
         const next = await apiRequest<Submission>(
-          `/operator/contests/${contestId}/test-submissions/${created.submission_id}/status:wait?wait_seconds=2&poll_interval_seconds=0.25`,
+          `/operator/contests/${contestId}/test-submissions/${created.submission_id}/status:wait?wait_seconds=1&poll_interval_seconds=0.1`,
           staffSession.accessToken
         );
         latest = next;
@@ -7145,7 +7152,7 @@ function AdminPage({
     if (!showJudge) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") loadJudgeInspector();
-    }, 3000);
+    }, 1000);
     const onFocus = () => loadJudgeInspector();
     window.addEventListener("focus", onFocus);
     return () => {
