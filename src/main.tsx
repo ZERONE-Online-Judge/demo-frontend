@@ -448,6 +448,12 @@ function emitSessionSync() {
   window.dispatchEvent(new Event(SESSION_SYNC_EVENT));
 }
 
+function clearStoredSessions() {
+  window.localStorage.removeItem(GENERAL_SESSION_KEY);
+  window.localStorage.removeItem(PARTICIPANT_SESSION_KEY);
+  emitSessionSync();
+}
+
 function toApiError(response: Response, payload: any) {
   return new ApiClientError(
     response.status,
@@ -687,6 +693,9 @@ async function apiRequest<T>(path: string, token?: string, init?: RequestInit): 
     }
   }
   if (!result.response.ok) {
+    if (result.response.status === 401 && currentToken && canAttemptAutoRefresh(path)) {
+      clearStoredSessions();
+    }
     throw toApiError(result.response, result.payload);
   }
   return result.payload.data as T;
@@ -1076,6 +1085,19 @@ function mapStaffSession(data: { access_token: string; refresh_token: string; st
   };
 }
 
+function isValidStaffSession(session: unknown): session is StaffSession {
+  const candidate = session as Partial<StaffSession> | null;
+  return Boolean(
+    candidate &&
+      typeof candidate.accessToken === "string" &&
+      typeof candidate.refreshToken === "string" &&
+      candidate.staff &&
+      typeof candidate.staff.email === "string" &&
+      typeof candidate.staff.display_name === "string" &&
+      typeof candidate.staff.is_service_master === "boolean"
+  );
+}
+
 function mapGeneralSession(data: GeneralSessionApi, previous?: GeneralSession | null): GeneralSession {
   return {
     accessToken: data.access_token ?? previous?.accessToken ?? "",
@@ -1328,7 +1350,8 @@ function App() {
     [api.contests, generalContests, api.contest, route.contestId]
   );
   const selectedContest = resolvedContest ?? emptyContest(route.contestId);
-  const operatorStaffSession = generalSession?.operatorSession ?? null;
+  const operatorCandidate = generalSession?.operatorSession;
+  const operatorStaffSession = isValidStaffSession(operatorCandidate) ? operatorCandidate : null;
   const activeParticipant = participant?.contestId === selectedContest.contest_id ? participant : null;
   const activeGeneralParticipant = generalSession?.participantContests.find((entry) => entry.contest.contest_id === selectedContest.contest_id) ?? null;
   const activeGeneralOperator = generalSession?.operatorContests.find((entry) => entry.contest.contest_id === selectedContest.contest_id) ?? null;
@@ -1528,24 +1551,15 @@ function App() {
           setGeneralSessionMessage("");
         }
       } catch (error) {
-        try {
-          const refreshed = await apiRequest<GeneralSessionApi>("/auth/general/refresh", undefined, {
-            method: "POST",
-            body: JSON.stringify({ refresh_token: session.refreshToken })
-          });
-          if (!cancelled) {
-            setGeneralSession(mapGeneralSession(refreshed, session));
-            setGeneralSessionMessage("");
-          }
-          return;
-        } catch {
-          // Refresh failure means the persistent general session is no longer usable.
-        }
         if (!cancelled) {
           setGeneralSession(null);
           setParticipant(null);
           setParticipantProblems({});
-          setGeneralSessionMessage(formatApiError(error, "로그인 세션이 만료되었습니다. 다시 로그인하세요"));
+          if (error instanceof ApiClientError && error.status === 401) {
+            setGeneralSessionMessage("");
+          } else {
+            setGeneralSessionMessage(formatApiError(error, "로그인 세션이 만료되었습니다. 다시 로그인하세요"));
+          }
         }
       }
     }
