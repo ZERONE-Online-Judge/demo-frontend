@@ -388,6 +388,7 @@ const PARTICIPANT_SESSION_KEY = "zoj.participantSession";
 const GENERAL_SESSION_KEY = "zoj.generalSession";
 const SESSION_SYNC_EVENT = "zoj:session-sync";
 const PROBLEM_META_PREFIX = "<!--ZOJ_META:";
+const CONTEST_STATUS_OPTIONS = ["schedule_tbd", "scheduled", "open", "running", "ended", "finalized", "archived"];
 const PROBLEM_STATEMENT_TEMPLATE = `# 문제 설명
 
 문제 설명을 작성하세요.
@@ -671,7 +672,7 @@ function emptyContest(contestId?: string): Contest {
     title: "대회",
     organization_name: "",
     overview: "",
-    status: "scheduled",
+    status: "schedule_tbd",
     start_at: now,
     end_at: now,
     freeze_at: now,
@@ -687,13 +688,24 @@ function emptyDivision(): Division {
 }
 
 function isContestEnded(contest: Contest) {
+  if (contest.status === "schedule_tbd") return false;
   return contest.status === "ended" || contest.status === "archived" || new Date(contest.end_at).getTime() <= Date.now();
 }
 
 function isContestOperationLocked(contest: Contest) {
+  if (contest.status === "schedule_tbd") return false;
   const now = Date.now();
   const inTimeWindow = new Date(contest.start_at).getTime() <= now && now < new Date(contest.end_at).getTime() && !["ended", "finalized", "archived"].includes(contest.status);
   return contest.status === "running" || inTimeWindow;
+}
+
+function isScheduleTbd(contestOrStatus: Contest | string) {
+  return (typeof contestOrStatus === "string" ? contestOrStatus : contestOrStatus.status) === "schedule_tbd";
+}
+
+function contestStatusLabel(status: string) {
+  if (status === "schedule_tbd") return "스케줄 미정";
+  return status;
 }
 
 function canViewContestResource(contest: Contest, hasSessionAccess: boolean, publicAfterEnd: boolean) {
@@ -1207,9 +1219,14 @@ function useApiData(selectedContestId?: string): ApiState {
         ]);
         const sortedContests = [...contests].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
         const detailContestId = selectedContestId ?? sortedContests[0]?.contest_id;
-        const detail = detailContestId
-          ? await apiRequest<{ contest: Contest; divisions: Division[] }>(`/public/contests/${detailContestId}`)
-          : null;
+        let detail: { contest: Contest; divisions: Division[] } | null = null;
+        if (detailContestId) {
+          try {
+            detail = await apiRequest<{ contest: Contest; divisions: Division[] }>(`/public/contests/${detailContestId}`);
+          } catch (error) {
+            if (!(error instanceof ApiClientError && error.status === 404)) throw error;
+          }
+        }
         if (!cancelled) {
           setState({
             status: "live",
@@ -2525,7 +2542,7 @@ function ContestCards({
           return (
             <article className="contestCard" key={contest.contest_id}>
               <div className="contestCardHeader">
-                <span className={`statusPill ${contest.status}`}>{contest.status}</span>
+                <span className={`statusPill ${contest.status}`}>{contestStatusLabel(contest.status)}</span>
                 <h2>{contest.title}</h2>
                 <p>{contest.overview}</p>
               </div>
@@ -2876,24 +2893,25 @@ function ContestPage({
   const memberEmail = participant?.member.email ?? generalParticipant?.member.email ?? generalSession?.account.email ?? "이메일 인증 필요";
   const teamName = participant?.team.team_name ?? generalParticipant?.team.team_name ?? (operatorContest ? "운영 권한" : "로그인 필요");
   const divisionName = participant?.division.name ?? generalParticipant?.division.name ?? (operatorContest ? "운영자" : "등록된 참가 유형");
+  const schedulePending = isScheduleTbd(contest);
   return (
     <section className="pageGrid contestWorkspace">
       <section className="contestHero">
         <div className="contestHeroMain">
-          <span className="sectionKicker">{contest.status}</span>
+          <span className="sectionKicker">{contestStatusLabel(contest.status)}</span>
           <h1>{contest.title}</h1>
           <p>{contest.overview}</p>
           <div className="contestHeroMeta">
             <span>{contest.organization_name}</span>
-            <span>{formatDate(contest.start_at)}</span>
-            <span>{timeLeft(contest.end_at)} left</span>
+            <span>{schedulePending ? "일정 미정" : formatDate(contest.start_at)}</span>
+            <span>{schedulePending ? "remaining TBD" : `${timeLeft(contest.end_at)} left`}</span>
             <span>{divisionName}</span>
           </div>
         </div>
         <aside className="contestHeroAside">
           <InfoCard icon={<Users />} title="내 정보" value={memberName} detail={memberEmail} />
           <InfoCard icon={<Trophy />} title="팀 정보" value={teamName} detail={divisionName} />
-          <InfoCard icon={<Timer />} title="남은 시간" value={timeLeft(contest.end_at)} detail={`freeze ${formatTime(contest.freeze_at)}`} />
+          <InfoCard icon={<Timer />} title="남은 시간" value={schedulePending ? "미정" : timeLeft(contest.end_at)} detail={schedulePending ? "일정 미정" : `freeze ${formatTime(contest.freeze_at)}`} />
         </aside>
       </section>
     </section>
@@ -3109,7 +3127,7 @@ function ProblemPage({
   const latest = localSubmission ?? problemSubmissions[0] ?? submissions.find((item) => item.problem_id === activeProblemId);
   const document = parseProblemDocument(activeProblem?.statement ?? "");
   const contestStarted = new Date(contest.start_at).getTime() <= now;
-  const contestEnded = contest.status === "ended" || contest.status === "archived" || new Date(contest.end_at).getTime() <= now;
+  const contestEnded = !isScheduleTbd(contest) && (contest.status === "ended" || contest.status === "archived" || new Date(contest.end_at).getTime() <= now);
   const contestRunning = contest.status === "running" && contestStarted && !contestEnded;
   const submitBusy = submitState === "submitting" || submitState === "waiting";
   const sourceReady = source.trim().length > 0;
@@ -3127,7 +3145,7 @@ function ProblemPage({
       : contestEnded
         ? "대회가 종료되었습니다."
         : contest.status !== "running"
-          ? `현재 대회 상태는 ${contest.status}입니다.`
+          ? `현재 대회 상태는 ${contestStatusLabel(contest.status)}입니다.`
           : !sourceReady
             ? "소스 코드를 입력하세요."
             : "";
@@ -3441,6 +3459,7 @@ function SubmissionsPage({
   const [message, setMessage] = useState("");
   const [selectedSubmissionId, setSelectedSubmissionId] = useState("");
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
+  const [selectedSubmissionDetail, setSelectedSubmissionDetail] = useState<Submission | null>(null);
   const [pageIndex, setPageIndex] = useState(() => readPageQuery(1));
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 20;
@@ -3535,6 +3554,32 @@ function SubmissionsPage({
   }, [participant?.team.team_name, staffSession?.staff.email, contest.contest_id, division.division_id]);
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadSubmissionDetail() {
+      if (!staffSession || !submissionModalOpen || !selectedSubmissionId) {
+        setSelectedSubmissionDetail(null);
+        return;
+      }
+      try {
+        const detail = await apiRequest<Submission>(
+          `/operator/contests/${contest.contest_id}/submissions/${selectedSubmissionId}`,
+          staffSession.accessToken
+        );
+        if (!cancelled) setSelectedSubmissionDetail(detail);
+      } catch (error) {
+        if (!cancelled) {
+          setSelectedSubmissionDetail(null);
+          setMessage(formatApiError(error, "제출 상세를 불러오지 못했습니다"));
+        }
+      }
+    }
+    loadSubmissionDetail();
+    return () => {
+      cancelled = true;
+    };
+  }, [contest.contest_id, selectedSubmissionId, staffSession?.accessToken, submissionModalOpen]);
+
+  useEffect(() => {
     const path = window.location.pathname;
     if (!path.includes("/submissions") && !path.includes("/submission")) return;
     const query = new URLSearchParams(window.location.search);
@@ -3545,7 +3590,7 @@ function SubmissionsPage({
 
   const solvedCount = filteredItems.filter((item) => item.status === "accepted").length;
   const judgingCount = filteredItems.filter((item) => ["waiting", "preparing", "judging"].includes(item.status)).length;
-  const selectedSubmission = filteredItems.find((item) => item.submission_id === selectedSubmissionId) ?? filteredItems[0] ?? null;
+  const selectedSubmission = selectedSubmissionDetail ?? filteredItems.find((item) => item.submission_id === selectedSubmissionId) ?? filteredItems[0] ?? null;
   const safePage = Math.max(1, pageIndex);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const pagedItems = filteredItems;
@@ -4260,7 +4305,7 @@ function OperatorPage({
           {contests.map((contest) => (
             <article className="contestCard" key={contest.contest_id}>
               <div>
-                <span className={`statusPill ${contest.status}`}>{contest.status}</span>
+                <span className={`statusPill ${contest.status}`}>{contestStatusLabel(contest.status)}</span>
                 <h2>{contest.title}</h2>
                 <p>{contest.overview}</p>
               </div>
@@ -4305,13 +4350,16 @@ function OperatorPage({
   const contest = dashboard.contest;
   const divisions = dashboard.divisions;
   const now = Date.now();
+  const schedulePending = isScheduleTbd(contest);
   const startAtMs = new Date(contest.start_at).getTime();
   const freezeAtMs = new Date(contest.freeze_at).getTime();
   const endAtMs = new Date(contest.end_at).getTime();
-  const openRemaining = startAtMs > now ? `${timeLeft(contest.start_at)} 남음` : "오픈됨";
-  const freezeRemaining = freezeAtMs > now ? `${timeLeft(contest.freeze_at)} 남음` : now < endAtMs ? "프리즈 진행 중" : "종료됨";
-  const endRemaining = endAtMs > now ? `${timeLeft(contest.end_at)} 남음` : "종료됨";
-  const contestRemaining = startAtMs > now
+  const openRemaining = schedulePending ? "일정 미정" : startAtMs > now ? `${timeLeft(contest.start_at)} 남음` : "오픈됨";
+  const freezeRemaining = schedulePending ? "일정 미정" : freezeAtMs > now ? `${timeLeft(contest.freeze_at)} 남음` : now < endAtMs ? "프리즈 진행 중" : "종료됨";
+  const endRemaining = schedulePending ? "일정 미정" : endAtMs > now ? `${timeLeft(contest.end_at)} 남음` : "종료됨";
+  const contestRemaining = schedulePending
+    ? "일정 미정"
+    : startAtMs > now
     ? `시작까지 ${timeLeft(contest.start_at)}`
     : endAtMs > now
       ? `마감까지 ${timeLeft(contest.end_at)}`
@@ -4324,19 +4372,19 @@ function OperatorPage({
           <h1>{contest.title}</h1>
           <p>{contest.organization_name} 운영 콘솔입니다. 설정, 참가팀, 문제, 공지를 한 화면에서 관리합니다.</p>
           <div className="contestHeroMeta">
-            <span>{contest.status}</span>
-            <span>오픈 {formatDate(contest.start_at)}</span>
-            <span>프리즈 {formatDate(contest.freeze_at)}</span>
-            <span>마감 {formatDate(contest.end_at)}</span>
+            <span>{contestStatusLabel(contest.status)}</span>
+            <span>오픈 {schedulePending ? "미정" : formatDate(contest.start_at)}</span>
+            <span>프리즈 {schedulePending ? "미정" : formatDate(contest.freeze_at)}</span>
+            <span>마감 {schedulePending ? "미정" : formatDate(contest.end_at)}</span>
             <span>{contestRemaining}</span>
             <span>{divisions.length} divisions</span>
           </div>
         </div>
         <div className="operatorHeroMeta">
-          <InfoCard icon={<Clock3 />} title="오픈 시간" value={formatDate(contest.start_at)} detail={openRemaining} />
-          <InfoCard icon={<Timer />} title="프리즈 시간" value={formatDate(contest.freeze_at)} detail={freezeRemaining} />
-          <InfoCard icon={<CalendarDays />} title="마감 시간" value={formatDate(contest.end_at)} detail={endRemaining} />
-          <InfoCard icon={<Gauge />} title="남은 시간" value={contestRemaining} detail={contest.status} />
+          <InfoCard icon={<Clock3 />} title="오픈 시간" value={schedulePending ? "미정" : formatDate(contest.start_at)} detail={openRemaining} />
+          <InfoCard icon={<Timer />} title="프리즈 시간" value={schedulePending ? "미정" : formatDate(contest.freeze_at)} detail={freezeRemaining} />
+          <InfoCard icon={<CalendarDays />} title="마감 시간" value={schedulePending ? "미정" : formatDate(contest.end_at)} detail={endRemaining} />
+          <InfoCard icon={<Gauge />} title="남은 시간" value={contestRemaining} detail={contestStatusLabel(contest.status)} />
           <InfoCard icon={<Users />} title="참가팀" value={String(dashboard.participant_count)} detail="division separated" />
           <InfoCard icon={<FileCode2 />} title="제출" value={String(dashboard.submission_count)} detail="all teams" />
           <InfoCard icon={<Activity />} title="대기열" value={String(dashboard.pending_jobs)} detail="pending" />
@@ -4364,7 +4412,7 @@ function OperatorSettingsPage({
   const [title, setTitle] = useState("");
   const [organizationName, setOrganizationName] = useState("");
   const [overview, setOverview] = useState("");
-  const [contestStatus, setContestStatus] = useState("scheduled");
+  const [contestStatus, setContestStatus] = useState("schedule_tbd");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   const [freezeAt, setFreezeAt] = useState("");
@@ -4432,6 +4480,7 @@ function OperatorSettingsPage({
 
   const contest = dashboard.contest;
   const operationLocked = isContestOperationLocked(contest);
+  const schedulePending = isScheduleTbd(contestStatus);
 
   function syncContestForm(next: Contest) {
     setContestStatus(next.status);
@@ -4448,10 +4497,11 @@ function OperatorSettingsPage({
   async function saveContestSettings() {
     setMessage("대회 설정을 저장하고 있습니다.");
     try {
-      const timeChanged =
+      const timeChanged = !schedulePending && (
         dateTimeLocalToIso(startAt) !== contest.start_at ||
         dateTimeLocalToIso(endAt) !== contest.end_at ||
-        dateTimeLocalToIso(freezeAt) !== contest.freeze_at;
+        dateTimeLocalToIso(freezeAt) !== contest.freeze_at
+      );
       if (operationLocked && timeChanged && !window.confirm("대회 운영 중 시간 변경은 참가자에게 긴급공지로 자동 안내됩니다. 변경하시겠습니까?")) {
         setMessage("시간 변경을 취소했습니다.");
         return;
@@ -4467,9 +4517,13 @@ function OperatorSettingsPage({
             organization_name: organizationName,
             overview,
             status: contestStatus,
-            start_at: dateTimeLocalToIso(startAt),
-            end_at: dateTimeLocalToIso(endAt),
-            freeze_at: dateTimeLocalToIso(freezeAt),
+            ...(schedulePending
+              ? {}
+              : {
+                  start_at: dateTimeLocalToIso(startAt),
+                  end_at: dateTimeLocalToIso(endAt),
+                  freeze_at: dateTimeLocalToIso(freezeAt)
+                }),
             problem_public_after_end: publicVisibility.problems,
             scoreboard_public_after_end: publicVisibility.scoreboard,
             submission_public_after_end: publicVisibility.submissions
@@ -4656,8 +4710,8 @@ function OperatorSettingsPage({
     <section className="pageGrid">
       <PageHeader badge="settings" title="대회 설정" description="기본 정보, 일정, 참가 유형, 종료 후 공개 정책을 관리합니다." />
       <section className="summaryGrid">
-        <InfoCard icon={<CalendarDays />} title="상태" value={contest.status} detail="scheduled/running/ended" />
-        <InfoCard icon={<Timer />} title="남은 시간" value={timeLeft(contest.end_at)} detail={`freeze ${formatTime(contest.freeze_at)}`} />
+        <InfoCard icon={<CalendarDays />} title="상태" value={contestStatusLabel(contest.status)} detail="schedule_tbd/scheduled/running/ended" />
+        <InfoCard icon={<Timer />} title="남은 시간" value={isScheduleTbd(contest) ? "미정" : timeLeft(contest.end_at)} detail={isScheduleTbd(contest) ? "일정 미정" : `freeze ${formatTime(contest.freeze_at)}`} />
         <InfoCard icon={<Users />} title="참가 유형" value={String(divisions.length)} detail="team requires exactly one" />
         <InfoCard icon={<Lock />} title="공개 설정" value={publicVisibility.scoreboard ? "ON" : "OFF"} detail="종료 후 공개" />
       </section>
@@ -4673,18 +4727,18 @@ function OperatorSettingsPage({
           <div className="fieldGrid">
             <label><span>대회명</span><input value={title} disabled={operationLocked} onChange={(event) => setTitle(event.target.value)} /></label>
             <label><span>개최기관</span><input value={organizationName} disabled={operationLocked} onChange={(event) => setOrganizationName(event.target.value)} /></label>
-            <label><span>대회 상태</span><select value={contestStatus} disabled={operationLocked} onChange={(event) => setContestStatus(event.target.value)}><option value="scheduled">scheduled</option><option value="open">open</option><option value="running">running</option><option value="ended">ended</option><option value="finalized">finalized</option><option value="archived">archived</option></select></label>
-            <label><span>시작 시각</span><input type="datetime-local" value={startAt} onChange={(event) => setStartAt(event.target.value)} /></label>
-            <label><span>종료 시각</span><input type="datetime-local" value={endAt} onChange={(event) => setEndAt(event.target.value)} /></label>
-            <label><span>프리즈 시작</span><input type="datetime-local" value={freezeAt} onChange={(event) => setFreezeAt(event.target.value)} /></label>
+            <label><span>대회 상태</span><select value={contestStatus} disabled={operationLocked} onChange={(event) => setContestStatus(event.target.value)}>{CONTEST_STATUS_OPTIONS.map((status) => <option key={status} value={status}>{contestStatusLabel(status)}</option>)}</select></label>
+            <label><span>시작 시각</span><input type="datetime-local" value={startAt} disabled={schedulePending} onChange={(event) => setStartAt(event.target.value)} /></label>
+            <label><span>종료 시각</span><input type="datetime-local" value={endAt} disabled={schedulePending} onChange={(event) => setEndAt(event.target.value)} /></label>
+            <label><span>프리즈 시작</span><input type="datetime-local" value={freezeAt} disabled={schedulePending} onChange={(event) => setFreezeAt(event.target.value)} /></label>
           </div>
           <div className="timeQuickGrid">
-            <button className="secondary" disabled={operationLocked} onClick={startContestNow}>지금 시작</button>
-            <button className="secondary" onClick={() => moveContestEnd(10)}>종료 +10분</button>
-            <button className="secondary" onClick={() => moveContestEnd(30)}>종료 +30분</button>
-            <button className="secondary" onClick={() => setFreezeBeforeEnd(60)}>프리즈 종료 1시간 전</button>
-            <button className="secondary" onClick={() => setFreezeBeforeEnd(30)}>프리즈 종료 30분 전</button>
-            <button className="secondary" onClick={freezeNow}>지금 프리즈</button>
+            <button className="secondary" disabled={operationLocked || schedulePending} onClick={startContestNow}>지금 시작</button>
+            <button className="secondary" disabled={schedulePending} onClick={() => moveContestEnd(10)}>종료 +10분</button>
+            <button className="secondary" disabled={schedulePending} onClick={() => moveContestEnd(30)}>종료 +30분</button>
+            <button className="secondary" disabled={schedulePending} onClick={() => setFreezeBeforeEnd(60)}>프리즈 종료 1시간 전</button>
+            <button className="secondary" disabled={schedulePending} onClick={() => setFreezeBeforeEnd(30)}>프리즈 종료 30분 전</button>
+            <button className="secondary" disabled={schedulePending} onClick={freezeNow}>지금 프리즈</button>
           </div>
           <label className="wideField"><span>대회 설명</span><textarea value={overview} disabled={operationLocked} onChange={(event) => setOverview(event.target.value)} /></label>
           <div className="buttonRow">
@@ -7168,7 +7222,7 @@ function AdminPage({
   const [contestTitle, setContestTitle] = useState("");
   const [contestOpenDate, setContestOpenDate] = useState(todayInputValue());
   const [organizationName, setOrganizationName] = useState("");
-  const [contestStatus, setContestStatus] = useState("scheduled");
+  const [contestStatus, setContestStatus] = useState("schedule_tbd");
   const [operatorEmail, setOperatorEmail] = useState("");
   const [serviceNotices, setServiceNotices] = useState<Notice[]>([]);
   const [serviceNoticeTitle, setServiceNoticeTitle] = useState("");
@@ -7250,7 +7304,7 @@ function AdminPage({
       setJudgeTotalCount(Math.max(0, Number(submissionPage.page.total_count ?? 0)));
       if (selectedJudgeEntry) {
         const updated = submissionPage.data.find((item) => item.submission.submission_id === selectedJudgeEntry.submission.submission_id);
-        setSelectedJudgeEntry(updated ?? null);
+        setSelectedJudgeEntry(updated ? { ...updated, submission: { ...updated.submission, source_code: selectedJudgeEntry.submission.source_code ?? updated.submission.source_code } } : null);
       }
     } catch (error) {
       setMessage(formatApiError(error, "채점기 현황을 불러오지 못했습니다"));
@@ -7279,7 +7333,7 @@ function AdminPage({
     setContestTitle("");
     setContestOpenDate(todayInputValue());
     setOrganizationName("");
-    setContestStatus("scheduled");
+    setContestStatus("schedule_tbd");
     setOperatorEmail("");
     setEditingContestId(null);
   }
@@ -7317,6 +7371,7 @@ function AdminPage({
         body: JSON.stringify({
           title: contestTitle.trim(),
           organization_name: organizationName,
+          status: "schedule_tbd",
           operator_email: operatorEmail.trim()
         })
       });
@@ -7335,13 +7390,14 @@ function AdminPage({
     if (!current) return;
     setMessage("대회 정보를 수정하고 있습니다.");
     try {
+      const schedulePending = isScheduleTbd(contestStatus);
       const updated = await apiRequest<Contest>(`/operator/contests/${editingContestId}/settings`, staffSession.accessToken, {
         method: "PATCH",
         body: JSON.stringify({
           title: contestTitle.trim() || current.title,
           organization_name: organizationName,
           status: contestStatus,
-          start_at: `${contestOpenDate}T00:00:00+09:00`,
+          ...(schedulePending ? {} : { start_at: `${contestOpenDate}T00:00:00+09:00` }),
           overview: current.overview === `${current.organization_name}에서 주최하는 대회입니다.` ? `${organizationName}에서 주최하는 대회입니다.` : current.overview,
         })
       });
@@ -7382,6 +7438,19 @@ function AdminPage({
     }
   }
 
+  async function openJudgeSubmissionDetail(entry: AdminJudgeSubmissionEntry) {
+    setSelectedJudgeEntry(entry);
+    try {
+      const detail = await apiRequest<AdminJudgeSubmissionEntry>(
+        `/admin/judge/submissions/${entry.submission.submission_id}`,
+        staffSession.accessToken
+      );
+      setSelectedJudgeEntry(detail);
+    } catch (error) {
+      setMessage(formatApiError(error, "제출 상세를 불러오지 못했습니다"));
+    }
+  }
+
   useEffect(() => {
     setJudgePageIndex(1);
   }, [section]);
@@ -7390,11 +7459,12 @@ function AdminPage({
   const judgePageItems = judgeEntries;
   const judgeTotalPages = Math.max(1, Math.ceil(judgeTotalCount / judgePageSize));
 
+  const adminSchedulePending = isScheduleTbd(contestStatus);
   const contestRows = contests.map((contest) => [
     contest.title,
     contest.organization_name,
-    contest.status,
-    formatDate(contest.start_at),
+    contestStatusLabel(contest.status),
+    isScheduleTbd(contest) ? "미정" : formatDate(contest.start_at),
     <span className="tableActions">
       <button className="iconButton" onClick={() => openEditContest(contest)} aria-label="대회 수정"><Pencil size={14} /></button>
       <button className="textButton" onClick={() => navigate("operator", { contestId: contest.contest_id })}>운영</button>
@@ -7460,7 +7530,7 @@ function AdminPage({
             <SubmissionStatusBadge submission={entry.submission} compact />,
             entry.problem ? `${entry.problem.time_limit_ms / 1000}s · ${entry.problem.memory_limit_mb}MB` : "-",
             entry.judge_node?.node_name ?? entry.judge_job?.assigned_node_id ?? "-",
-            <button className="textButton" onClick={() => setSelectedJudgeEntry(entry)}>보기</button>,
+            <button className="textButton" onClick={() => openJudgeSubmissionDetail(entry)}>보기</button>,
           ])}
         />
         {judgeEntries.length > 0 && <SimplePagination page={judgeSafePage} totalPages={judgeTotalPages} onChange={setJudgePageIndex} />}
@@ -7555,8 +7625,8 @@ function AdminPage({
             <label><span>{editorMode === "create" ? "대회 운영자 이메일" : "추가/변경 운영자 이메일"}</span><input value={operatorEmail} placeholder="operator@example.com" onChange={(event) => setOperatorEmail(event.target.value)} /></label>
             {editorMode === "edit" && (
               <>
-                <label><span>대회 오픈일</span><input type="date" value={contestOpenDate} onChange={(event) => setContestOpenDate(event.target.value)} /></label>
-                <label><span>대회 공개상태</span><select value={contestStatus} onChange={(event) => setContestStatus(event.target.value)}><option value="scheduled">스케줄</option><option value="open">오픈</option></select></label>
+                <label><span>대회 오픈일</span><input type="date" value={contestOpenDate} disabled={adminSchedulePending} onChange={(event) => setContestOpenDate(event.target.value)} /></label>
+                <label><span>대회 공개상태</span><select value={contestStatus} onChange={(event) => setContestStatus(event.target.value)}><option value="schedule_tbd">스케줄 미정</option><option value="scheduled">스케줄</option><option value="open">오픈</option></select></label>
               </>
             )}
           </div>
