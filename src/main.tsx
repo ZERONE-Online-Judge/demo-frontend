@@ -3637,7 +3637,7 @@ function SubmissionsPage({
       )}
       <section className="summaryGrid">
         <InfoCard icon={<Users />} title="범위" value={participant?.team.team_name ?? (staffSession ? "전체 제출" : "로그인 필요")} detail={participant?.division.name ?? (staffSession ? "운영자" : "참가자 인증")} />
-        <InfoCard icon={<FileCode2 />} title="제출" value={String(filteredItems.length)} detail="current list" />
+        <InfoCard icon={<FileCode2 />} title="제출" value={String(totalCount)} detail={`current page ${filteredItems.length}`} />
         <InfoCard icon={<CheckCircle2 />} title="Accepted" value={String(solvedCount)} detail="accepted submissions" />
         <InfoCard icon={<Activity />} title="채점 중" value={String(judgingCount)} detail="waiting/preparing/judging" />
       </section>
@@ -7576,7 +7576,7 @@ function AdminPage({
           />
           <InfoCard icon={<Activity />} title="큐" value={String(judgeDashboard?.queue_stats?.pending_count ?? 0)} detail="pending" />
           <InfoCard icon={<PlayCircle />} title="실행 중" value={String(judgeDashboard?.queue_stats?.running_count ?? 0)} detail="running" />
-          <InfoCard icon={<Clock3 />} title="최근 기록" value={String(judgeEntries.length)} detail="latest submissions" />
+          <InfoCard icon={<Clock3 />} title="최근 기록" value={String(judgeTotalCount)} detail={`current page ${judgeEntries.length}`} />
         </div>
         <DataTable
           columns={["노드", "상태", "슬롯", "실행", "하트비트"]}
