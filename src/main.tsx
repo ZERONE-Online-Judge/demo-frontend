@@ -606,7 +606,7 @@ function parseRoute(): RouteState {
   if (parts[0] === "contests" && parts[1] && parts[2] === "login") return { page: "participant-login", contestId: parts[1] };
   if (parts[0] === "contests" && parts[1] && parts[2] === "problems" && parts[3]) return { page: "problem", contestId: parts[1], problemId: parts[3] };
   if (parts[0] === "contests" && parts[1] && parts[2] === "problems") return { page: "problemset", contestId: parts[1] };
-  if (parts[0] === "contests" && parts[1] && parts[2] === "submissions") return { page: "submissions", contestId: parts[1] };
+  if (parts[0] === "contests" && parts[1] && (parts[2] === "submissions" || parts[2] === "submission")) return { page: "submissions", contestId: parts[1] };
   if (parts[0] === "contests" && parts[1] && parts[2] === "scoreboard") return { page: "scoreboard", contestId: parts[1] };
   if (parts[0] === "contests" && parts[1] && parts[2] === "board") return { page: "board", contestId: parts[1] };
   if (parts[0] === "contests" && parts[1]) return { page: "contest", contestId: parts[1] };
@@ -625,6 +625,14 @@ function parseRoute(): RouteState {
   if (parts[0] === "operator" && parts[1] === "contests" && parts[2]) return { page: "operator", contestId: parts[2] };
   if (parts[0] === "operator") return { page: "operator" };
   return { page: "home" };
+}
+
+function readPageQuery(defaultPage: number = 1): number {
+  const value = new URLSearchParams(window.location.search).get("page");
+  if (!value) return defaultPage;
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return defaultPage;
+  return parsed;
 }
 
 function routePath(route: RouteState) {
@@ -2932,7 +2940,7 @@ function ProblemSetPage({
   openProblem: (id: string) => void;
 }) {
   const pageSize = 12;
-  const [pageIndex, setPageIndex] = useState(1);
+  const [pageIndex, setPageIndex] = useState(() => readPageQuery(1));
   useEffect(() => {
     setPageIndex(1);
   }, [division.division_id, problems.length]);
@@ -3219,7 +3227,10 @@ function ProblemPage({
         return;
       }
       try {
-        const data = await apiRequest<Submission[]>(`/contests/${contest.contest_id}/submissions`, activeParticipant.accessToken);
+        const data = await apiRequest<Submission[]>(
+          `/contests/${contest.contest_id}/submissions?limit=20&cursor=0&include_source=false`,
+          activeParticipant.accessToken
+        );
         if (!cancelled) {
           setProblemSubmissions(data.filter((item) => item.problem_id === activeProblemId).sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()));
         }
@@ -3520,6 +3531,15 @@ function SubmissionsPage({
   useEffect(() => {
     setPageIndex(1);
   }, [participant?.team.team_name, staffSession?.staff.email, contest.contest_id, division.division_id]);
+
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (!path.includes("/submissions") && !path.includes("/submission")) return;
+    const query = new URLSearchParams(window.location.search);
+    query.set("page", String(Math.max(1, pageIndex)));
+    const nextUrl = `${path}?${query.toString()}`;
+    window.history.replaceState(window.history.state, "", nextUrl);
+  }, [pageIndex]);
 
   const solvedCount = filteredItems.filter((item) => item.status === "accepted").length;
   const judgingCount = filteredItems.filter((item) => ["waiting", "preparing", "judging"].includes(item.status)).length;
