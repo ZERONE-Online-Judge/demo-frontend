@@ -287,6 +287,15 @@ type AdminJudgeDashboard = {
     heartbeat_age_seconds: number;
   }>;
   queue: Array<{ judge_job_id: string; submission_id: string; contest_id: string; division_id: string; status: string; queue_position: number; assigned_node_id?: string | null; leased_at?: string | null; created_at: string }>;
+  queue_stats?: { pending_count: number; running_count: number; succeeded_count: number };
+};
+type ApiPageMeta = {
+  limit: number;
+  next_cursor: string | null;
+};
+type ApiPagePayload<T> = {
+  data: T;
+  page: ApiPageMeta;
 };
 type ApiState = {
   status: ApiStatus;
@@ -699,6 +708,28 @@ async function apiRequest<T>(path: string, token?: string, init?: RequestInit): 
     throw toApiError(result.response, result.payload);
   }
   return result.payload.data as T;
+}
+
+async function apiPageRequest<T>(path: string, token?: string, init?: RequestInit): Promise<ApiPagePayload<T>> {
+  let currentToken = token;
+  let result = await apiFetchRaw(path, currentToken, init);
+  if (!result.response.ok && result.response.status === 401 && currentToken && canAttemptAutoRefresh(path)) {
+    const refreshedToken = await tryRefreshTokenForRequest(currentToken, path);
+    if (refreshedToken) {
+      currentToken = refreshedToken;
+      result = await apiFetchRaw(path, currentToken, init);
+    }
+  }
+  if (!result.response.ok) {
+    if (result.response.status === 401 && currentToken && canAttemptAutoRefresh(path)) {
+      clearStoredSessions();
+    }
+    throw toApiError(result.response, result.payload);
+  }
+  return {
+    data: (result.payload.data ?? []) as T,
+    page: (result.payload.page ?? { limit: 20, next_cursor: null }) as ApiPageMeta,
+  };
 }
 
 function formatApiError(error: unknown, fallback: string) {
@@ -3398,6 +3429,7 @@ function SubmissionsPage({
   const [selectedSubmissionId, setSelectedSubmissionId] = useState("");
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
   const [pageIndex, setPageIndex] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(false);
   const pageSize = 20;
   const problemMap = useMemo(
     () => new Map((api.problems[division.division_id] ?? api.problems[division.code] ?? Object.values(api.problems).flat()).map((problem) => [problem.problem_id, problem])),
@@ -3410,20 +3442,26 @@ function SubmissionsPage({
 
   useEffect(() => {
     let cancelled = false;
-    async function loadSubmissions() {
+    async function loadSubmissions(page: number = pageIndex) {
+      const cursor = String(Math.max(0, page - 1) * pageSize);
       if (!participant) {
         if (!staffSession) {
           setItems([]);
           setStatus("idle");
           setMessage("참가팀 로그인 후 자기 팀 제출만 표시됩니다.");
+          setHasNextPage(false);
           return;
         }
         setStatus("loading");
         setMessage("제출 목록을 불러오는 중입니다.");
         try {
-          const data = await apiRequest<Submission[]>(`/operator/contests/${contest.contest_id}/submissions`, staffSession.accessToken);
+          const pageData = await apiPageRequest<Submission[]>(
+            `/operator/contests/${contest.contest_id}/submissions?limit=${pageSize}&cursor=${encodeURIComponent(cursor)}&include_source=false`,
+            staffSession.accessToken
+          );
           if (!cancelled) {
-            setItems(data);
+            setItems(pageData.data);
+            setHasNextPage(Boolean(pageData.page.next_cursor));
             setStatus("ready");
             setMessage("운영자 권한으로 전체 제출을 표시 중입니다.");
           }
@@ -3439,9 +3477,13 @@ function SubmissionsPage({
       setStatus("loading");
       setMessage("제출 목록을 불러오는 중입니다.");
       try {
-        const data = await apiRequest<Submission[]>(`/contests/${contest.contest_id}/submissions`, participant.accessToken);
+        const pageData = await apiPageRequest<Submission[]>(
+          `/contests/${contest.contest_id}/submissions?limit=${pageSize}&cursor=${encodeURIComponent(cursor)}`,
+          participant.accessToken
+        );
         if (!cancelled) {
-          setItems(data);
+          setItems(pageData.data);
+          setHasNextPage(Boolean(pageData.page.next_cursor));
           setStatus("ready");
           setMessage("자기 팀 제출만 표시 중입니다.");
         }
@@ -3453,18 +3495,18 @@ function SubmissionsPage({
         }
       }
     }
-    loadSubmissions();
+    loadSubmissions(pageIndex);
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") loadSubmissions();
+      if (document.visibilityState === "visible") loadSubmissions(pageIndex);
     }, 1200);
-    const onFocus = () => loadSubmissions();
+    const onFocus = () => loadSubmissions(pageIndex);
     window.addEventListener("focus", onFocus);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [api.submissions, contest.contest_id, participant, staffSession?.accessToken]);
+  }, [api.submissions, contest.contest_id, participant, staffSession?.accessToken, pageIndex]);
 
   useEffect(() => {
     if (!filteredItems.length) {
@@ -3482,9 +3524,9 @@ function SubmissionsPage({
   const solvedCount = filteredItems.filter((item) => item.status === "accepted").length;
   const judgingCount = filteredItems.filter((item) => ["waiting", "preparing", "judging"].includes(item.status)).length;
   const selectedSubmission = filteredItems.find((item) => item.submission_id === selectedSubmissionId) ?? filteredItems[0] ?? null;
-  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize));
-  const safePage = Math.min(pageIndex, totalPages);
-  const pagedItems = filteredItems.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const safePage = Math.max(1, pageIndex);
+  const totalPages = Math.max(1, safePage + (hasNextPage ? 1 : 0));
+  const pagedItems = filteredItems;
 
   return (
     <section className="pageGrid">
@@ -7085,6 +7127,7 @@ function AdminPage({
   const [judgeEntries, setJudgeEntries] = useState<AdminJudgeSubmissionEntry[]>([]);
   const [selectedJudgeEntry, setSelectedJudgeEntry] = useState<AdminJudgeSubmissionEntry | null>(null);
   const [judgePageIndex, setJudgePageIndex] = useState(1);
+  const [judgeHasNext, setJudgeHasNext] = useState(false);
   const judgePageSize = 20;
   const showHome = section === "home";
   const showContests = section === "contests";
@@ -7140,16 +7183,21 @@ function AdminPage({
     loadServiceNotices();
   }, [staffSession.accessToken, showHome]);
 
-  async function loadJudgeInspector() {
+  async function loadJudgeInspector(page: number = judgePageIndex) {
     try {
-      const [dashboardData, submissionData] = await Promise.all([
+      const cursor = String(Math.max(0, page - 1) * judgePageSize);
+      const [dashboardData, submissionPage] = await Promise.all([
         apiRequest<AdminJudgeDashboard>("/admin/judge/dashboard", staffSession.accessToken),
-        apiRequest<AdminJudgeSubmissionEntry[]>("/admin/judge/submissions?limit=120", staffSession.accessToken),
+        apiPageRequest<AdminJudgeSubmissionEntry[]>(
+          `/admin/judge/submissions?limit=${judgePageSize}&cursor=${encodeURIComponent(cursor)}&include_source=false`,
+          staffSession.accessToken
+        ),
       ]);
       setJudgeDashboard(dashboardData);
-      setJudgeEntries(submissionData);
+      setJudgeEntries(submissionPage.data);
+      setJudgeHasNext(Boolean(submissionPage.page.next_cursor));
       if (selectedJudgeEntry) {
-        const updated = submissionData.find((item) => item.submission.submission_id === selectedJudgeEntry.submission.submission_id);
+        const updated = submissionPage.data.find((item) => item.submission.submission_id === selectedJudgeEntry.submission.submission_id);
         setSelectedJudgeEntry(updated ?? null);
       }
     } catch (error) {
@@ -7159,21 +7207,21 @@ function AdminPage({
 
   useEffect(() => {
     if (!showJudge) return;
-    loadJudgeInspector();
-  }, [staffSession.accessToken, showJudge]);
+    loadJudgeInspector(judgePageIndex);
+  }, [staffSession.accessToken, showJudge, judgePageIndex]);
 
   useEffect(() => {
     if (!showJudge) return;
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible") loadJudgeInspector();
+      if (document.visibilityState === "visible") loadJudgeInspector(judgePageIndex);
     }, 1000);
-    const onFocus = () => loadJudgeInspector();
+    const onFocus = () => loadJudgeInspector(judgePageIndex);
     window.addEventListener("focus", onFocus);
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [staffSession.accessToken, selectedJudgeEntry?.submission.submission_id, showJudge]);
+  }, [staffSession.accessToken, selectedJudgeEntry?.submission.submission_id, showJudge, judgePageIndex]);
 
   function resetContestEditor() {
     setContestTitle("");
@@ -7284,11 +7332,11 @@ function AdminPage({
 
   useEffect(() => {
     setJudgePageIndex(1);
-  }, [judgeEntries.length, section]);
+  }, [section]);
 
-  const judgeTotalPages = Math.max(1, Math.ceil(judgeEntries.length / judgePageSize));
-  const judgeSafePage = Math.min(judgePageIndex, judgeTotalPages);
-  const judgePageItems = judgeEntries.slice((judgeSafePage - 1) * judgePageSize, judgeSafePage * judgePageSize);
+  const judgeSafePage = Math.max(1, judgePageIndex);
+  const judgePageItems = judgeEntries;
+  const judgeTotalPages = Math.max(1, judgeSafePage + (judgeHasNext ? 1 : 0));
 
   const contestRows = contests.map((contest) => [
     contest.title,
@@ -7326,7 +7374,7 @@ function AdminPage({
       <section className="panel">
         <div className="panelTitleRow">
           <PanelTitle icon={<Server />} title="채점기" />
-          <button className="secondary" onClick={loadJudgeInspector}>새로고침</button>
+          <button className="secondary" onClick={() => loadJudgeInspector(judgePageIndex)}>새로고침</button>
         </div>
         <div className="summaryGrid">
           <InfoCard
@@ -7335,8 +7383,8 @@ function AdminPage({
             value={`${(judgeDashboard?.nodes ?? []).filter((node) => node.is_active).length}/${judgeDashboard?.nodes.length ?? 0}`}
             detail="active/registered"
           />
-          <InfoCard icon={<Activity />} title="큐" value={String(judgeDashboard?.queue.filter((job) => job.status === "pending").length ?? 0)} detail="pending" />
-          <InfoCard icon={<PlayCircle />} title="실행 중" value={String(judgeDashboard?.queue.filter((job) => job.status === "running" || job.status === "assigned").length ?? 0)} detail="running/assigned" />
+          <InfoCard icon={<Activity />} title="큐" value={String(judgeDashboard?.queue_stats?.pending_count ?? 0)} detail="pending" />
+          <InfoCard icon={<PlayCircle />} title="실행 중" value={String(judgeDashboard?.queue_stats?.running_count ?? 0)} detail="running" />
           <InfoCard icon={<Clock3 />} title="최근 기록" value={String(judgeEntries.length)} detail="latest submissions" />
         </div>
         <DataTable
