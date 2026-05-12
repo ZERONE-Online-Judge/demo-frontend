@@ -3471,6 +3471,11 @@ function SubmissionsPage({
     () => (staffSession ? items.filter((item) => !item.division_id || item.division_id === division.division_id) : items),
     [items, staffSession, division.division_id]
   );
+  const pendingSubmissionIds = useMemo(
+    () => filteredItems.filter((item) => isSubmissionPending(item.status)).map((item) => item.submission_id),
+    [filteredItems]
+  );
+  const pendingSubmissionKey = pendingSubmissionIds.join(",");
 
   useEffect(() => {
     let cancelled = false;
@@ -3530,7 +3535,7 @@ function SubmissionsPage({
     loadSubmissions(pageIndex);
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") loadSubmissions(pageIndex);
-    }, 1200);
+    }, 5000);
     const onFocus = () => loadSubmissions(pageIndex);
     window.addEventListener("focus", onFocus);
     return () => {
@@ -3539,6 +3544,33 @@ function SubmissionsPage({
       window.removeEventListener("focus", onFocus);
     };
   }, [api.submissions, contest.contest_id, participant, staffSession?.accessToken, pageIndex]);
+
+  useEffect(() => {
+    if (!staffSession) return;
+    const staffToken = staffSession.accessToken;
+    const pendingIds = pendingSubmissionIds;
+    if (!pendingIds.length) return;
+    let cancelled = false;
+    async function waitPending(submissionId: string) {
+      try {
+        const updated = await apiRequest<Submission>(
+          `/operator/contests/${contest.contest_id}/submissions/${submissionId}/status:wait?wait_seconds=4&poll_interval_seconds=0.5`,
+          staffToken
+        );
+        if (cancelled) return;
+        setItems((current) => current.map((item) => (item.submission_id === updated.submission_id ? { ...item, ...updated, source_code: item.source_code } : item)));
+        if (selectedSubmissionDetail?.submission_id === updated.submission_id) {
+          setSelectedSubmissionDetail((current) => (current ? { ...current, ...updated, source_code: current.source_code } : current));
+        }
+      } catch {
+        // The slower full-list refresh will recover transient status polling errors.
+      }
+    }
+    pendingIds.forEach((submissionId) => void waitPending(submissionId));
+    return () => {
+      cancelled = true;
+    };
+  }, [contest.contest_id, pendingSubmissionKey, selectedSubmissionDetail?.submission_id, staffSession?.accessToken]);
 
   useEffect(() => {
     if (!filteredItems.length) {
@@ -7238,6 +7270,11 @@ function AdminPage({
   const showHome = section === "home";
   const showContests = section === "contests";
   const showJudge = section === "judge";
+  const pendingJudgeSubmissionIds = useMemo(
+    () => judgeEntries.filter((entry) => isSubmissionPending(entry.submission.status)).map((entry) => entry.submission.submission_id),
+    [judgeEntries]
+  );
+  const pendingJudgeSubmissionKey = pendingJudgeSubmissionIds.join(",");
 
   useEffect(() => {
     let cancelled = false;
@@ -7320,7 +7357,7 @@ function AdminPage({
     if (!showJudge) return;
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") loadJudgeInspector(judgePageIndex);
-    }, 1000);
+    }, 5000);
     const onFocus = () => loadJudgeInspector(judgePageIndex);
     window.addEventListener("focus", onFocus);
     return () => {
@@ -7328,6 +7365,38 @@ function AdminPage({
       window.removeEventListener("focus", onFocus);
     };
   }, [staffSession.accessToken, selectedJudgeEntry?.submission.submission_id, showJudge, judgePageIndex]);
+
+  useEffect(() => {
+    if (!showJudge || !pendingJudgeSubmissionIds.length) return;
+    let cancelled = false;
+    async function waitPending(submissionId: string) {
+      try {
+        const updated = await apiRequest<Submission>(
+          `/admin/judge/submissions/${submissionId}/status:wait?wait_seconds=4&poll_interval_seconds=0.5`,
+          staffSession.accessToken
+        );
+        if (cancelled) return;
+        setJudgeEntries((current) =>
+          current.map((entry) =>
+            entry.submission.submission_id === updated.submission_id
+              ? { ...entry, submission: { ...entry.submission, ...updated, source_code: entry.submission.source_code } }
+              : entry
+          )
+        );
+        setSelectedJudgeEntry((current) =>
+          current?.submission.submission_id === updated.submission_id
+            ? { ...current, submission: { ...current.submission, ...updated, source_code: current.submission.source_code } }
+            : current
+        );
+      } catch {
+        // The slower full-list refresh will recover transient status polling errors.
+      }
+    }
+    pendingJudgeSubmissionIds.forEach((submissionId) => void waitPending(submissionId));
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingJudgeSubmissionKey, showJudge, staffSession.accessToken]);
 
   function resetContestEditor() {
     setContestTitle("");
