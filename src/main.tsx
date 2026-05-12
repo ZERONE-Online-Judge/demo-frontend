@@ -292,6 +292,8 @@ type AdminJudgeDashboard = {
 type ApiPageMeta = {
   limit: number;
   next_cursor: string | null;
+  current_cursor?: string | null;
+  total_count?: number | null;
 };
 type ApiPagePayload<T> = {
   data: T;
@@ -736,7 +738,7 @@ async function apiPageRequest<T>(path: string, token?: string, init?: RequestIni
   }
   return {
     data: (result.payload.data ?? []) as T,
-    page: (result.payload.page ?? { limit: 20, next_cursor: null }) as ApiPageMeta,
+    page: (result.payload.page ?? { limit: 20, next_cursor: null, current_cursor: "0", total_count: 0 }) as ApiPageMeta,
   };
 }
 
@@ -3439,8 +3441,8 @@ function SubmissionsPage({
   const [message, setMessage] = useState("");
   const [selectedSubmissionId, setSelectedSubmissionId] = useState("");
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
-  const [pageIndex, setPageIndex] = useState(1);
-  const [hasNextPage, setHasNextPage] = useState(false);
+  const [pageIndex, setPageIndex] = useState(() => readPageQuery(1));
+  const [totalCount, setTotalCount] = useState(0);
   const pageSize = 20;
   const problemMap = useMemo(
     () => new Map((api.problems[division.division_id] ?? api.problems[division.code] ?? Object.values(api.problems).flat()).map((problem) => [problem.problem_id, problem])),
@@ -3460,7 +3462,7 @@ function SubmissionsPage({
           setItems([]);
           setStatus("idle");
           setMessage("참가팀 로그인 후 자기 팀 제출만 표시됩니다.");
-          setHasNextPage(false);
+          setTotalCount(0);
           return;
         }
         setStatus("loading");
@@ -3472,7 +3474,7 @@ function SubmissionsPage({
           );
           if (!cancelled) {
             setItems(pageData.data);
-            setHasNextPage(Boolean(pageData.page.next_cursor));
+            setTotalCount(Math.max(0, Number(pageData.page.total_count ?? 0)));
             setStatus("ready");
             setMessage("운영자 권한으로 전체 제출을 표시 중입니다.");
           }
@@ -3494,7 +3496,7 @@ function SubmissionsPage({
         );
         if (!cancelled) {
           setItems(pageData.data);
-          setHasNextPage(Boolean(pageData.page.next_cursor));
+          setTotalCount(Math.max(0, Number(pageData.page.total_count ?? 0)));
           setStatus("ready");
           setMessage("자기 팀 제출만 표시 중입니다.");
         }
@@ -3545,7 +3547,7 @@ function SubmissionsPage({
   const judgingCount = filteredItems.filter((item) => ["waiting", "preparing", "judging"].includes(item.status)).length;
   const selectedSubmission = filteredItems.find((item) => item.submission_id === selectedSubmissionId) ?? filteredItems[0] ?? null;
   const safePage = Math.max(1, pageIndex);
-  const totalPages = Math.max(1, safePage + (hasNextPage ? 1 : 0));
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const pagedItems = filteredItems;
 
   return (
@@ -7147,7 +7149,7 @@ function AdminPage({
   const [judgeEntries, setJudgeEntries] = useState<AdminJudgeSubmissionEntry[]>([]);
   const [selectedJudgeEntry, setSelectedJudgeEntry] = useState<AdminJudgeSubmissionEntry | null>(null);
   const [judgePageIndex, setJudgePageIndex] = useState(1);
-  const [judgeHasNext, setJudgeHasNext] = useState(false);
+  const [judgeTotalCount, setJudgeTotalCount] = useState(0);
   const judgePageSize = 20;
   const showHome = section === "home";
   const showContests = section === "contests";
@@ -7215,7 +7217,7 @@ function AdminPage({
       ]);
       setJudgeDashboard(dashboardData);
       setJudgeEntries(submissionPage.data);
-      setJudgeHasNext(Boolean(submissionPage.page.next_cursor));
+      setJudgeTotalCount(Math.max(0, Number(submissionPage.page.total_count ?? 0)));
       if (selectedJudgeEntry) {
         const updated = submissionPage.data.find((item) => item.submission.submission_id === selectedJudgeEntry.submission.submission_id);
         setSelectedJudgeEntry(updated ?? null);
@@ -7356,7 +7358,7 @@ function AdminPage({
 
   const judgeSafePage = Math.max(1, judgePageIndex);
   const judgePageItems = judgeEntries;
-  const judgeTotalPages = Math.max(1, judgeSafePage + (judgeHasNext ? 1 : 0));
+  const judgeTotalPages = Math.max(1, Math.ceil(judgeTotalCount / judgePageSize));
 
   const contestRows = contests.map((contest) => [
     contest.title,
