@@ -3666,21 +3666,51 @@ function ScoreboardPage({
   const [liveRows, setLiveRows] = useState<ScoreboardRow[]>([]);
   const [frozen, setFrozen] = useState(false);
   const [message, setMessage] = useState("");
+  const [operatorDivisions, setOperatorDivisions] = useState<Division[]>([]);
   const canSelectDivision = Boolean(staffSession) || !locked;
-  const fallbackRowsForDivision = api.scoreboard.filter((row) => !row.division || row.division === division.name);
+  const divisionOptions = api.divisions.length ? api.divisions : operatorDivisions;
+  const effectiveDivision = division.division_id ? division : divisionOptions[0] ?? division;
+  const fallbackRowsForDivision = api.scoreboard.filter((row) => !row.division || row.division === effectiveDivision.name);
   const rows = liveRows.length ? liveRows : fallbackRowsForDivision;
   const problemCodes = Array.from(new Set(rows.flatMap((row) => row.problem_scores.map((score) => score.problem_code)))).sort();
   const freezeWarning = freezeAnnouncement(contest);
   const endWarning = contestEndAnnouncement(contest);
+  const scoreboardDescription = !canSelectDivision
+    ? `로그인한 팀의 ${effectiveDivision.name} 참가 유형 순위만 표시합니다.`
+    : effectiveDivision.division_id
+    ? `${effectiveDivision.name} 유형 기준 순위입니다.`
+    : "등록된 참가 유형이 없어 전체 스코어보드를 표시합니다.";
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadOperatorDivisions() {
+      if (!staffSession || api.divisions.length || operatorDivisions.length) return;
+      try {
+        const data = await apiRequest<OperatorDashboard>(`/operator/contests/${contest.contest_id}/dashboard`, staffSession.accessToken);
+        if (cancelled) return;
+        const sorted = [...data.divisions].sort((a, b) => a.name.localeCompare(b.name));
+        setOperatorDivisions(sorted);
+        if (!division.division_id && sorted[0]) setDivisionId(sorted[0].division_id);
+      } catch {
+        // Keep the scoreboard usable via the contest-level operator endpoint.
+      }
+    }
+    loadOperatorDivisions();
+    return () => {
+      cancelled = true;
+    };
+  }, [api.divisions.length, contest.contest_id, division.division_id, operatorDivisions.length, setDivisionId, staffSession]);
 
   useEffect(() => {
     let cancelled = false;
     async function loadOnce(waitSeconds: number) {
       const path = staffSession
-        ? `/operator/contests/${contest.contest_id}/divisions/${division.division_id}/scoreboard/internal`
+        ? effectiveDivision.division_id
+          ? `/operator/contests/${contest.contest_id}/divisions/${effectiveDivision.division_id}/scoreboard/internal`
+          : `/operator/contests/${contest.contest_id}/scoreboard/internal`
         : participant
         ? `/contests/${contest.contest_id}/scoreboard${waitSeconds ? ":wait" : ""}?wait_seconds=${waitSeconds}`
-        : `/contests/${contest.contest_id}/divisions/${division.division_id}/scoreboard${waitSeconds ? ":wait" : ""}?wait_seconds=${waitSeconds}`;
+        : `/contests/${contest.contest_id}/divisions/${effectiveDivision.division_id}/scoreboard${waitSeconds ? ":wait" : ""}?wait_seconds=${waitSeconds}`;
       try {
         const data = await apiRequest<ScoreboardResponse | OperatorScoreboardResponse>(path, staffSession?.accessToken ?? participant?.accessToken);
         if (!cancelled) {
@@ -3708,15 +3738,15 @@ function ScoreboardPage({
     return () => {
       cancelled = true;
     };
-  }, [contest.contest_id, division.division_id, participant?.accessToken, staffSession?.accessToken]);
+  }, [contest.contest_id, effectiveDivision.division_id, participant?.accessToken, staffSession?.accessToken]);
 
   return (
     <section className="pageGrid">
-      <PageHeader badge="scoreboard" title="스코어보드" description={!canSelectDivision ? `로그인한 팀의 ${division.name} 참가 유형 순위만 표시합니다.` : `${division.name} 유형 기준 순위입니다.`} />
+      <PageHeader badge="scoreboard" title="스코어보드" description={scoreboardDescription} />
       {canSelectDivision ? (
-        <Segmented options={api.divisions} value={division.division_id} onChange={setDivisionId} />
+        <Segmented options={divisionOptions} value={effectiveDivision.division_id} onChange={setDivisionId} />
       ) : (
-        <DivisionLock division={division} />
+        <DivisionLock division={effectiveDivision} />
       )}
       {endWarning && (
         <section className="emergencyBox">
