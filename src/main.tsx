@@ -520,6 +520,22 @@ function parseContestId(path: string) {
   return match?.[1] ?? null;
 }
 
+function preferredStoredTokenForRequest(path: string, token?: string): string | undefined {
+  const general = loadStoredGeneralSession();
+  if ((path.startsWith("/operator/") || path.startsWith("/admin/")) && general?.operatorSession?.accessToken) {
+    return general.operatorSession.accessToken;
+  }
+  if ((path === "/auth/general/me" || path.startsWith("/auth/general/")) && general?.accessToken) {
+    return general.accessToken;
+  }
+  const contestId = parseContestId(path);
+  const participant = loadStoredParticipantSession();
+  if (contestId && participant?.accessToken && (!participant.contestId || participant.contestId === contestId)) {
+    return participant.accessToken;
+  }
+  return token;
+}
+
 function storedReplacementTokenForRequest(token: string, path: string): string | null {
   const general = loadStoredGeneralSession();
   if ((path.startsWith("/operator/") || path.startsWith("/admin/")) && general?.operatorSession?.accessToken && general.operatorSession.accessToken !== token) {
@@ -537,6 +553,24 @@ function storedReplacementTokenForRequest(token: string, path: string): string |
     return general.accessToken;
   }
   return null;
+}
+
+async function refreshOperatorAccessTokenViaGeneralSession(): Promise<string | null> {
+  const general = loadStoredGeneralSession();
+  if (!general?.accessToken) return null;
+  let generalToken = general.accessToken;
+  let result = await apiFetchRaw("/auth/general/me", generalToken);
+  if (result.response.status === 401 && general.refreshToken) {
+    const refreshedGeneral = await refreshGeneralAccessToken(generalToken);
+    if (!refreshedGeneral) return null;
+    generalToken = refreshedGeneral;
+    result = await apiFetchRaw("/auth/general/me", generalToken);
+  }
+  if (!result.response.ok) return null;
+  const next = mapGeneralSession(result.payload.data, loadStoredGeneralSession());
+  saveGeneralSession(next);
+  emitSessionSync();
+  return next.operatorSession?.accessToken ?? null;
 }
 
 async function refreshStaffAccessToken(token: string): Promise<string | null> {
@@ -633,6 +667,10 @@ async function tryRefreshTokenForRequest(token: string, path: string): Promise<s
   if (replacement) return replacement;
   const refreshedStaff = await refreshStaffAccessToken(token);
   if (refreshedStaff) return refreshedStaff;
+  if (path.startsWith("/operator/") || path.startsWith("/admin/")) {
+    const refreshedOperator = await refreshOperatorAccessTokenViaGeneralSession();
+    if (refreshedOperator) return refreshedOperator;
+  }
   const refreshedGeneral = await refreshGeneralAccessToken(token);
   if (refreshedGeneral) return refreshedGeneral;
   const refreshedParticipant = await refreshParticipantAccessToken(token, path);
@@ -756,7 +794,7 @@ function canViewContestResource(contest: Contest, hasSessionAccess: boolean, pub
 }
 
 async function apiRequest<T>(path: string, token?: string, init?: RequestInit): Promise<T> {
-  let currentToken = token;
+  let currentToken = preferredStoredTokenForRequest(path, token);
   let result = await apiFetchRaw(path, currentToken, init);
   if (!result.response.ok && result.response.status === 401 && currentToken && canAttemptAutoRefresh(path)) {
     const refreshedToken = await tryRefreshTokenForRequest(currentToken, path);
@@ -775,7 +813,7 @@ async function apiRequest<T>(path: string, token?: string, init?: RequestInit): 
 }
 
 async function apiPageRequest<T>(path: string, token?: string, init?: RequestInit): Promise<ApiPagePayload<T>> {
-  let currentToken = token;
+  let currentToken = preferredStoredTokenForRequest(path, token);
   let result = await apiFetchRaw(path, currentToken, init);
   if (!result.response.ok && result.response.status === 401 && currentToken && canAttemptAutoRefresh(path)) {
     const refreshedToken = await tryRefreshTokenForRequest(currentToken, path);
