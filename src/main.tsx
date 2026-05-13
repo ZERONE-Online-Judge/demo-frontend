@@ -5695,6 +5695,14 @@ function OperatorProblemsPage({
   });
   const [packageStatus, setPackageStatus] = useState<ProblemPackageStatus | null>(null);
   const statementRef = useRef<HTMLTextAreaElement | null>(null);
+  const sortProblems = (items: Problem[]) =>
+    [...items].sort((a, b) => {
+      const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+      if (orderDiff) return orderDiff;
+      const codeDiff = a.problem_code.localeCompare(b.problem_code);
+      if (codeDiff) return codeDiff;
+      return a.title.localeCompare(b.title);
+    });
 
   async function loadProblems() {
     if (!contestId) return;
@@ -5708,7 +5716,7 @@ function OperatorProblemsPage({
       setDivisions(context.divisions);
       if (!divisionId && context.divisions[0]) setDivisionId(context.divisions[0].division_id);
       if (!filterDivisionId && context.divisions[0]) setFilterDivisionId(context.divisions[0].division_id);
-      setProblems(data);
+      setProblems(sortProblems(data));
       if (!selectedProblemId && data[0] && editorMode !== "create") openProblemEditor(data[0]);
       setStatus("ready");
       setMessage("문제 목록을 불러왔습니다.");
@@ -5854,7 +5862,7 @@ function OperatorProblemsPage({
           max_score: maxScore
         })
       });
-      setProblems((current) => [...current, created]);
+      setProblems((current) => sortProblems([...current, created]));
       openProblemEditor(created);
       setStatus("ready");
       setMessage("문제가 등록되었습니다.");
@@ -5882,6 +5890,7 @@ function OperatorProblemsPage({
         method: "PATCH",
         body: JSON.stringify({
           division_id: divisionId,
+          problem_code: problemCode,
           title,
           statement: serializeProblemDocument({ statement, inputDescription, outputDescription, note, examples }),
           time_limit_ms: timeLimitMs,
@@ -5890,7 +5899,7 @@ function OperatorProblemsPage({
           max_score: maxScore
         })
       });
-      setProblems((current) => current.map((problem) => (problem.problem_id === updated.problem_id ? { ...problem, ...updated } : problem)));
+      setProblems((current) => sortProblems(current.map((problem) => (problem.problem_id === updated.problem_id ? { ...problem, ...updated } : problem))));
       setDivisionId(updated.division_id ?? divisionId);
       setFilterDivisionId(updated.division_id ?? divisionId);
       setStatus("ready");
@@ -6693,7 +6702,7 @@ function OperatorProblemsPage({
 
   const selectedDivision = divisions.find((division) => division.division_id === (filterDivisionId || divisionId)) ?? divisions[0] ?? emptyDivision();
   const problemDivision = divisions.find((division) => division.division_id === divisionId) ?? selectedDivision;
-  const filtered = problems.filter((problem) => problem.division_id === selectedDivision.division_id);
+  const filtered = sortProblems(problems.filter((problem) => problem.division_id === selectedDivision.division_id));
   const selectedProblem = problems.find((problem) => problem.problem_id === selectedProblemId) ?? null;
   const statementLength = [statement, inputDescription, outputDescription, note].join("").trim().length;
   const testcaseCount = testcaseSets.reduce((count, set) => count + (set.testcases?.length ?? 0), 0);
@@ -6900,10 +6909,10 @@ function OperatorProblemsPage({
           <section className="editorSectionGrid">
             <div className="editorSection">
               <h3>기본 정보</h3>
-              <p className="panelNote">문제 코드는 생성 후 변경하지 않는 기준으로 운영합니다.</p>
+              <p className="panelNote">문제 코드는 같은 참가 유형 안에서 중복될 수 없습니다.</p>
               <div className="fieldGrid">
                 <label><span>참가 유형</span><select value={divisionId} disabled={operationLocked} onChange={(event) => setDivisionId(event.target.value)}>{divisions.map((division) => <option key={division.division_id} value={division.division_id}>{division.name}</option>)}</select></label>
-                <label><span>문제 코드</span><input value={problemCode} placeholder="A" onChange={(event) => setProblemCode(event.target.value)} disabled={operationLocked || editorMode === "edit"} /></label>
+                <label><span>문제 코드</span><input value={problemCode} placeholder="A" onChange={(event) => setProblemCode(event.target.value)} disabled={operationLocked} /></label>
                 <label><span>문제 제목</span><input value={title} disabled={operationLocked} placeholder="문제 제목" onChange={(event) => setTitle(event.target.value)} /></label>
                 <label><span>표시 순서</span><input type="number" value={displayOrder} disabled={operationLocked} onChange={(event) => setDisplayOrder(Number(event.target.value))} /></label>
               </div>
