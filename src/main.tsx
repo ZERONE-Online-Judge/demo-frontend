@@ -6045,7 +6045,7 @@ function OperatorProblemsPage({
       setMessage(`${file.name} 패키지 파일 등록이 완료되었습니다.`);
     } catch (error) {
       setStatus("error");
-      setMessage(error instanceof Error ? error.message : "패키지 파일 업로드에 실패했습니다.");
+      setMessage(formatApiError(error, "패키지 파일 업로드 실패"));
     }
   }
 
@@ -6408,7 +6408,7 @@ function OperatorProblemsPage({
       setSelectedTestcaseSetId(result.testcase_set.testcase_set_id);
       await loadProblemResources(selectedProblemId);
       setStatus("ready");
-      setMessage(`검증 완료: v${result.testcase_set.version} 활성 세트에 ${result.verified_count}개 테스트케이스를 등록했습니다.`);
+      setMessage(`검증 완료: 이번 업로드 ${cases.length}개, 활성 세트 v${result.testcase_set.version} 전체 ${result.verified_count}개입니다.`);
     } catch (error) {
       setStatus("error");
       setMessage(error instanceof Error ? error.message : "테스트케이스 검증에 실패했습니다.");
@@ -6445,7 +6445,7 @@ function OperatorProblemsPage({
       setSelectedTestcaseSetId(result.testcase_set.testcase_set_id);
       await loadProblemResources(selectedProblemId);
       setStatus("ready");
-      setMessage(`zip 검증 완료: ${result.verified_count}개 테스트케이스를 활성 세트 v${result.testcase_set.version}에 등록했습니다.`);
+      setMessage(`zip 검증 완료: 이번 업로드 ${result.imported_archive?.case_count ?? result.verified_count}개, 활성 세트 v${result.testcase_set.version} 전체 ${result.verified_count}개입니다.`);
     } catch (error) {
       setStatus("error");
       setMessage(formatApiError(error, "zip 테스트케이스 검증 실패"));
@@ -6635,7 +6635,7 @@ function OperatorProblemsPage({
       setTestcaseSets((current) => [{ ...result.testcase_set, testcases: result.testcases }, ...current.map((item) => ({ ...item, is_active: false }))]);
       setSelectedTestcaseSetId(result.testcase_set.testcase_set_id);
       setStatus("ready");
-      setMessage(`자동 매칭 완료: ${result.verified_count}개 케이스를 저장했습니다.${warnings.length ? ` (누락 ${warnings.length}건)` : ""}`);
+      setMessage(`자동 매칭 완료: 이번 업로드 ${cases.length}개, 활성 세트 전체 ${result.verified_count}개입니다.${warnings.length ? ` (누락 ${warnings.length}건)` : ""}`);
       setBulkProgress((current) => ({ ...current, phase: "검증 완료", current: current.total }));
       await loadProblemResources(selectedProblemId);
     } catch (error) {
