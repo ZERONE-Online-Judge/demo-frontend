@@ -1694,18 +1694,19 @@ function App() {
       try {
         const data = await apiRequest<GeneralSessionApi>("/auth/general/me", session.accessToken);
         if (!cancelled) {
-          setGeneralSession(mapGeneralSession(data, session));
+          const latestSession = loadStoredGeneralSession();
+          setGeneralSession(mapGeneralSession(data, latestSession ?? session));
           setGeneralSessionMessage("");
         }
       } catch (error) {
         if (!cancelled) {
-          setGeneralSession(null);
-          setParticipant(null);
-          setParticipantProblems({});
           if (error instanceof ApiClientError && error.status === 401) {
+            setGeneralSession(null);
+            setParticipant(null);
+            setParticipantProblems({});
             setGeneralSessionMessage("");
           } else {
-            setGeneralSessionMessage(formatApiError(error, "로그인 세션이 만료되었습니다. 다시 로그인하세요"));
+            setGeneralSessionMessage(formatApiError(error, "로그인 세션 확인에 실패했습니다. 기존 세션은 유지합니다"));
           }
         }
       }
@@ -1727,17 +1728,23 @@ function App() {
           session.accessToken
         );
         if (!cancelled) {
+          const latestParticipant = loadStoredParticipantSession();
           setParticipant({
             ...session,
+            accessToken: latestParticipant?.contestId === session.contestId ? latestParticipant.accessToken : session.accessToken,
             team: data.team,
             member: data.member,
             division: data.division
           });
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setParticipant(null);
-          setParticipantProblems({});
+          if (error instanceof ApiClientError && error.status === 401) {
+            setParticipant(null);
+            setParticipantProblems({});
+          } else {
+            setGeneralSessionMessage(formatApiError(error, "참가 세션 확인에 실패했습니다. 기존 세션은 유지합니다"));
+          }
         }
       }
     }
@@ -1947,7 +1954,6 @@ function App() {
             generalSession={generalSession}
             problem={currentProblem}
             problems={currentProblems}
-            submissions={api.submissions}
             staffSession={activeGeneralOperator ? operatorStaffSession : null}
             openProblem={(id) => {
               setProblemId(id);
@@ -3186,7 +3192,6 @@ function ProblemPage({
   generalSession,
   problem,
   problems,
-  submissions,
   staffSession,
   openProblem,
   openSubmissions
@@ -3198,7 +3203,6 @@ function ProblemPage({
   generalSession: GeneralSession | null;
   problem?: Problem;
   problems: Problem[];
-  submissions: Submission[];
   staffSession?: StaffSession | null;
   openProblem: (id: string) => void;
   openSubmissions: () => void;
@@ -3207,9 +3211,7 @@ function ProblemPage({
   const [source, setSource] = useState("");
   const [language, setLanguage] = useState("cpp17");
   const [workspaceMode, setWorkspaceMode] = useState<"split" | "statement" | "submit">("split");
-  const [localSubmission, setLocalSubmission] = useState<Submission | null>(null);
-  const [problemSubmissions, setProblemSubmissions] = useState<Submission[]>([]);
-  const [submitState, setSubmitState] = useState<"idle" | "submitting" | "waiting" | "done" | "error">("idle");
+  const [submitState, setSubmitState] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [submitMessage, setSubmitMessage] = useState("");
   const [assets, setAssets] = useState<ProblemAsset[]>([]);
   const [packageStatus, setPackageStatus] = useState<ProblemPackageStatus | null>(null);
@@ -3218,12 +3220,11 @@ function ProblemPage({
   const activeProblemId = activeProblem?.problem_id ?? "";
   const activeParticipant = participant ?? fallbackParticipant;
   const operatorContest = Boolean(generalSession?.operatorContests.some((entry) => entry.contest.contest_id === contest.contest_id));
-  const latest = localSubmission ?? problemSubmissions[0] ?? submissions.find((item) => item.problem_id === activeProblemId);
   const document = parseProblemDocument(activeProblem?.statement ?? "");
   const contestStarted = new Date(contest.start_at).getTime() <= now;
   const contestEnded = !isScheduleTbd(contest) && (contest.status === "ended" || contest.status === "archived" || new Date(contest.end_at).getTime() <= now);
   const contestRunning = contest.status === "running" && contestStarted && !contestEnded;
-  const submitBusy = submitState === "submitting" || submitState === "waiting";
+  const submitBusy = submitState === "submitting";
   const sourceReady = source.trim().length > 0;
   const showSubmitPanel = !staffSession;
   const submitDisabledReason = !generalSession
@@ -3333,31 +3334,6 @@ function ProblemPage({
     };
   }, [activeProblem?.problem_id, contest.contest_id, activeParticipant?.accessToken, staffSession?.accessToken]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function loadProblemSubmissions() {
-      if (!activeParticipant || !activeProblemId) {
-        setProblemSubmissions([]);
-        return;
-      }
-      try {
-        const data = await apiRequest<Submission[]>(
-          `/contests/${contest.contest_id}/submissions?limit=20&cursor=0&include_source=false`,
-          activeParticipant.accessToken
-        );
-        if (!cancelled) {
-          setProblemSubmissions(data.filter((item) => item.problem_id === activeProblemId).sort((a, b) => new Date(b.submitted_at).getTime() - new Date(a.submitted_at).getTime()));
-        }
-      } catch {
-        if (!cancelled) setProblemSubmissions([]);
-      }
-    }
-    loadProblemSubmissions();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeProblemId, contest.contest_id, activeParticipant?.accessToken]);
-
   if (!activeProblem) {
     return (
       <section className="pageGrid">
@@ -3369,15 +3345,6 @@ function ProblemPage({
       </section>
     );
   }
-  const historyRows = problemSubmissions.map((item) => [
-    item.submission_id.slice(0, 8),
-    formatTime(item.submitted_at),
-    item.language,
-    <SubmissionStatusBadge submission={item} compact />,
-    item.awarded_score ?? "-",
-    item.source_code ? `${item.source_code.length} B` : "-"
-  ]);
-
   async function submitCode() {
     if (!canSubmit) {
       setSubmitState("error");
@@ -3386,9 +3353,9 @@ function ProblemPage({
     }
     if (!activeParticipant) return;
     setSubmitState("submitting");
-    setSubmitMessage("제출을 전송하고 있습니다.");
+    setSubmitMessage("");
     try {
-      const created = await apiRequest<Submission>(
+      await apiRequest<Submission>(
         `/contests/${contest.contest_id}/problems/${activeProblemId}/submissions`,
         activeParticipant.accessToken,
         {
@@ -3396,29 +3363,8 @@ function ProblemPage({
           body: JSON.stringify({ language, source_code: source })
         }
       );
-      setLocalSubmission(created);
-      setProblemSubmissions((items) => [created, ...items.filter((item) => item.submission_id !== created.submission_id)]);
-      setSubmitState("waiting");
-      setSubmitMessage("채점 대기 중 · 0%");
-      let judged = created;
-      for (let attempt = 0; attempt < 24; attempt += 1) {
-        judged = await apiRequest<Submission>(
-          `/contests/${contest.contest_id}/submissions/${created.submission_id}/status:wait?wait_seconds=1&poll_interval_seconds=0.1`,
-          activeParticipant.accessToken
-        );
-        setLocalSubmission(judged);
-        setProblemSubmissions((items) => [judged, ...items.filter((item) => item.submission_id !== judged.submission_id)]);
-        const progressText = submissionProgressText(judged);
-        if (isSubmissionTerminal(judged.status)) {
-          setSubmitState("done");
-          setSubmitMessage(`채점 완료 · ${submissionStatusLabel(judged.status)}`);
-          return;
-        }
-        setSubmitState("waiting");
-        setSubmitMessage(`${submissionStatusLabel(judged.status)}${progressText ? ` · ${progressText}` : ""}`);
-      }
-      setSubmitState("waiting");
-      setSubmitMessage(`${submissionStatusLabel(judged.status)}${submissionProgressText(judged) ? ` · ${submissionProgressText(judged)}` : ""} · 채점 현황에서 계속 확인하세요.`);
+      setSubmitState("done");
+      openSubmissions();
     } catch (error) {
       setSubmitState("error");
       setSubmitMessage(error instanceof Error ? error.message : "제출에 실패했습니다.");
@@ -3496,36 +3442,11 @@ function ProblemPage({
           <option value="java8">Java 8</option>
         </select>
         <CodeEditor value={source} language={language} onChange={setSource} disabled={submitBusy} />
-        <div className={canSubmit ? "submitStatusBox available" : "submitStatusBox blocked"}>
-          <strong>{canSubmit ? "제출 대기" : "제출 비활성화"}</strong>
-          <span>{canSubmit ? "현재 대회 시간이 유효합니다." : submitDisabledReason}</span>
-        </div>
         <button onClick={submitCode} disabled={!canSubmit}>
           <Code2 size={16} />
-          {submitBusy ? "채점 대기" : "제출"}
+          {submitBusy ? "제출 중" : "제출"}
         </button>
-        {submitMessage && <p className={`submitMessage ${submitState}`}>{submitMessage}</p>}
-        {localSubmission && (
-          <button className="secondaryButton" onClick={openSubmissions}>
-            <History size={16} />
-            채점 현황으로 이동
-          </button>
-        )}
-        <dl className="submissionMeta">
-          <div><dt>제출 번호</dt><dd>{latest?.submission_id.slice(0, 8) ?? "-"}</dd></div>
-          <div><dt>제출 시간</dt><dd>{formatTime(latest?.submitted_at)}</dd></div>
-          <div><dt>채점 결과</dt><dd>{latest ? <SubmissionStatusBadge submission={latest} /> : "미제출"}</dd></div>
-          <div><dt>코드 길이</dt><dd>{source.length} B</dd></div>
-          <div><dt>남은 시간</dt><dd>{timeLeft(contest.end_at)}</dd></div>
-        </dl>
-        <section className="problemSubmissionHistory">
-          <PanelTitle icon={<History />} title="이 문제 제출 기록" />
-          {historyRows.length ? (
-            <DataTable columns={["번호", "시간", "언어", "결과", "점수", "길이"]} rows={historyRows} />
-          ) : (
-            <p className="mutedText">아직 이 문제에 제출한 기록이 없습니다.</p>
-          )}
-        </section>
+        {submitMessage && submitState === "error" && <p className={`submitMessage ${submitState}`}>{submitMessage}</p>}
       </aside>
       )}
     </section>
@@ -4007,8 +3928,6 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
       const sortedQuestions = [...nextQuestions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       setNotices(sortedNotices);
       setQuestions(sortedQuestions);
-      setSelectedNoticeId((current) => current && sortedNotices.some((notice) => notice.contest_notice_id === current) ? current : sortedNotices[0]?.contest_notice_id ?? "");
-      setSelectedQuestionId((current) => current && sortedQuestions.some((question) => question.contest_question_id === current) ? current : sortedQuestions[0]?.contest_question_id ?? "");
       setMessage("");
     } catch (error) {
       setMessage(formatApiError(error, "게시판을 불러오지 못했습니다"));
@@ -4088,11 +4007,7 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
         method: "POST",
         body: JSON.stringify({ body: answerDrafts[questionId] ?? "", visibility: answerVisibility[questionId] ?? "public" })
       });
-      setQuestions((current) =>
-        current.map((question) =>
-          question.contest_question_id === questionId ? { ...question, answers: [...question.answers, answer] } : question
-        )
-      );
+      setQuestions((current) => current.map((question) => question.contest_question_id === questionId ? { ...question, answers: [answer, ...question.answers] } : question));
       setAnswerDrafts((current) => ({ ...current, [questionId]: "" }));
       setAnswerVisibility((current) => ({ ...current, [questionId]: "public" }));
       setOpenAnswerComposer(null);
@@ -4102,8 +4017,9 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
     }
   }
 
-  const selectedNotice = notices.find((notice) => notice.contest_notice_id === selectedNoticeId) ?? notices[0] ?? null;
-  const selectedQuestion = questions.find((question) => question.contest_question_id === selectedQuestionId) ?? questions[0] ?? null;
+  const selectedNotice = notices.find((notice) => notice.contest_notice_id === selectedNoticeId) ?? null;
+  const selectedQuestion = questions.find((question) => question.contest_question_id === selectedQuestionId) ?? null;
+  const selectedQuestionAnswers = selectedQuestion ? [...selectedQuestion.answers].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()) : [];
   const noticeCount = notices.length;
   const questionCount = questions.length;
   const answerCount = questions.reduce((total, question) => total + question.answers.length, 0);
@@ -4136,8 +4052,7 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
       </section>
       {message && <p className={`submitMessage ${message.includes("실패") || message.includes("못했습니다") ? "error" : "done"}`}>{message}</p>}
       {mode === "notices" ? (
-        <section className="boardStreamLayout">
-          <div className="boardStreamColumn">
+        <section className="panel boardListPanel">
             <div className="panelTitleRow">
               <PanelTitle icon={<Bell />} title="대회 공지" />
               <div className="tableActions">
@@ -4161,12 +4076,11 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
             )}
             <div className="boardThreadFeed">
               {notices.length ? notices.map((notice) => {
-                const active = selectedNotice?.contest_notice_id === notice.contest_notice_id;
                 return (
                   <button
                     key={notice.contest_notice_id}
                     type="button"
-                    className={active ? "boardThreadCard active" : notice.emergency ? "boardThreadCard emergency" : "boardThreadCard"}
+                    className={notice.emergency ? "boardThreadCard emergency" : "boardThreadCard"}
                     onClick={() => setSelectedNoticeId(notice.contest_notice_id)}
                   >
                     <div className="boardThreadHeader">
@@ -4186,30 +4100,9 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
                 );
               }) : <div className="boardEmpty">등록된 공지가 없습니다.</div>}
             </div>
-          </div>
-          <article className="boardFocusPane">
-            {selectedNotice ? (
-              <>
-                <div className="boardFocusHeader">
-                  <div>
-                    <span className={selectedNotice.emergency ? "statusPill failed" : "statusPill active"}>{selectedNotice.emergency ? "긴급 공지" : "공지"}</span>
-                    <h2>{selectedNotice.title}</h2>
-                    <small>{formatDate(selectedNotice.published_at)}</small>
-                  </div>
-                </div>
-                <MarkdownPreview statement={selectedNotice.body} assets={[]} />
-              </>
-            ) : (
-              <div className="boardEmpty">
-                <strong>공지 선택</strong>
-                <span>왼쪽 스트림에서 공지를 선택하세요.</span>
-              </div>
-            )}
-          </article>
         </section>
       ) : (
-        <section className="boardStreamLayout">
-          <div className="boardStreamColumn">
+        <section className="panel boardListPanel">
             <div className="panelTitleRow">
               <PanelTitle icon={<MessageSquare />} title="질문 게시판" />
               <div className="tableActions">
@@ -4235,12 +4128,11 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
             )}
             <div className="boardThreadFeed">
               {questions.length ? questions.map((question) => {
-                const active = selectedQuestion?.contest_question_id === question.contest_question_id;
                 return (
                   <button
                     key={question.contest_question_id}
                     type="button"
-                    className={active ? "boardThreadCard active" : "boardThreadCard"}
+                    className="boardThreadCard"
                     onClick={() => setSelectedQuestionId(question.contest_question_id)}
                   >
                     <div className="boardThreadHeader">
@@ -4259,25 +4151,48 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
                 );
               }) : <div className="boardEmpty">등록된 질문이 없습니다.</div>}
             </div>
-          </div>
-          <article className="boardFocusPane">
-            {selectedQuestion ? (
-              <>
-                <div className="boardFocusHeader">
+        </section>
+      )}
+      {selectedNotice && (
+        <div className="modalOverlay" onClick={() => setSelectedNoticeId("")}>
+          <article className="panel boardArticleModal modalPanel" onClick={(event) => event.stopPropagation()}>
+            <div className="boardFocusHeader">
+              <div>
+                <span className={selectedNotice.emergency ? "statusPill failed" : "statusPill active"}>{selectedNotice.emergency ? "긴급 공지" : "공지"}</span>
+                <h2>{selectedNotice.title}</h2>
+                <small>운영자 · {formatDate(selectedNotice.published_at)} · {selectedNotice.visibility === "participants" ? "참가자 공개" : "전체 공개"}</small>
+              </div>
+              <button className="secondary" onClick={() => setSelectedNoticeId("")}>닫기</button>
+            </div>
+            <MarkdownPreview statement={selectedNotice.body} assets={[]} />
+          </article>
+        </div>
+      )}
+      {selectedQuestion && (
+        <div className="modalOverlay" onClick={() => setSelectedQuestionId("")}>
+          <article className="panel boardArticleModal modalPanel" onClick={(event) => event.stopPropagation()}>
+            <div className="boardFocusHeader">
                   <div>
                     <span className="statusPill scheduled">{selectedQuestion.visibility === "private" ? "비공개" : "공개"}</span>
                     <h2>{selectedQuestion.title}</h2>
-                    <small>{selectedQuestion.team_name ?? "팀"} · {formatDate(selectedQuestion.created_at)}</small>
+                    <small>{selectedQuestion.author_name ?? selectedQuestion.team_name ?? "참가자"} · {selectedQuestion.team_name ?? "팀"} · {formatDate(selectedQuestion.created_at)}</small>
                   </div>
-                  {staffSession && (
+                  <div className="tableActions">
+                    {staffSession && (
                     <button className="secondary" onClick={() => setOpenAnswerComposer(openAnswerComposer === selectedQuestion.contest_question_id ? null : selectedQuestion.contest_question_id)}>
                       답변
                     </button>
-                  )}
+                    )}
+                    <button className="secondary" onClick={() => setSelectedQuestionId("")}>닫기</button>
+                  </div>
                 </div>
                 <MarkdownPreview statement={selectedQuestion.body} assets={[]} />
                 <section className="boardReplyStream">
-                  {selectedQuestion.answers.map((answer) => (
+                  <div className="panelTitleRow">
+                    <h3>댓글 {selectedQuestionAnswers.length}</h3>
+                    <span className="panelNote">최근 댓글이 위에 표시됩니다. 대댓글은 지원하지 않습니다.</span>
+                  </div>
+                  {selectedQuestionAnswers.map((answer) => (
                     <article className="boardReplyCard" key={answer.contest_answer_id}>
                       <div className="boardThreadHeader compact">
                         <div className="boardAvatar reply">O</div>
@@ -4290,7 +4205,7 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
                       <MarkdownPreview statement={answer.body} assets={[]} />
                     </article>
                   ))}
-                  {!selectedQuestion.answers.length && <div className="boardEmpty">아직 답변이 없습니다.</div>}
+                  {!selectedQuestionAnswers.length && <div className="boardEmpty">아직 댓글이 없습니다.</div>}
                 </section>
                 {staffSession && openAnswerComposer === selectedQuestion.contest_question_id && (
                   <section className="boardComposerCard compact">
@@ -4307,15 +4222,8 @@ function BoardPage({ api, contest, participant, staffSession }: { api: ApiState;
                     </div>
                   </section>
                 )}
-              </>
-            ) : (
-              <div className="boardEmpty">
-                <strong>질문 선택</strong>
-                <span>왼쪽 스트림에서 질문을 선택하세요.</span>
-              </div>
-            )}
           </article>
-        </section>
+        </div>
       )}
     </section>
   );
@@ -4427,7 +4335,7 @@ function OperatorPage({
             <InfoCard icon={<ShieldCheck />} title="세션" value={staffSession.staff.display_name} detail={staffSession.staff.email} />
           </div>
         </section>
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} />
         <section className="contestCards operatorContestDeck">
           {contests.map((contest) => (
             <article className="contestCard" key={contest.contest_id}>
@@ -4469,7 +4377,7 @@ function OperatorPage({
             <p>운영 대회 정보를 불러오는 중입니다.</p>
           </div>
         </section>
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} />
       </section>
     );
   }
@@ -4518,7 +4426,7 @@ function OperatorPage({
           <InfoCard icon={<Lock />} title="재채점" value="불가" detail="all controls off" />
         </div>
       </section>
-      {message && <p className="submitMessage error">{message}</p>}
+      <PageNotice message={message} />
     </section>
   );
 }
@@ -4592,7 +4500,7 @@ function OperatorSettingsPage({
     return (
       <section className="pageGrid">
         <StaffContestGate navigate={navigate} />
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} />
       </section>
     );
   }
@@ -4600,7 +4508,7 @@ function OperatorSettingsPage({
     return (
       <section className="pageGrid">
         <PageHeader badge="settings" title="대회 설정" description="대회 설정을 불러오는 중입니다." />
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} />
       </section>
     );
   }
@@ -4836,6 +4744,7 @@ function OperatorSettingsPage({
   return (
     <section className="pageGrid">
       <PageHeader badge="settings" title="대회 설정" description="기본 정보, 일정, 참가 유형, 종료 후 공개 정책을 관리합니다." />
+      <PageNotice message={message} />
       <section className="summaryGrid">
         <InfoCard icon={<CalendarDays />} title="상태" value={contestStatusLabel(contest.status)} detail="schedule_tbd/scheduled/running/ended" />
         <InfoCard icon={<Timer />} title="대회 시간" value={contestRemainingLabel(contest)} detail={isScheduleTbd(contest) ? "일정 미정" : `freeze ${formatContestMoment(contest.freeze_at)}`} />
@@ -4928,7 +4837,6 @@ function OperatorSettingsPage({
             <button onClick={openScoreboardAfterEnd}><Trophy size={16} /> 스코어보드 공개</button>
           </div>
         )}
-        {message && <p className="submitMessage done">{message}</p>}
         <div className="policyStrip">
           <span>현재 상태: {contestStatus}</span>
           <span>{isContestEnded(contest) ? "종료 후 공개 정책 적용 가능" : "비로그인 공개 차단 중"}</span>
@@ -4985,7 +4893,7 @@ function OperatorNoticesPage({
     return (
       <section className="pageGrid">
         <StaffContestGate navigate={navigate} />
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} />
       </section>
     );
   }
@@ -4993,7 +4901,7 @@ function OperatorNoticesPage({
     return (
       <section className="pageGrid">
         <PageHeader badge="notices" title="공지" description="공지 정보를 불러오는 중입니다." />
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} />
       </section>
     );
   }
@@ -5066,6 +4974,7 @@ function OperatorNoticesPage({
   return (
     <section className="pageGrid">
       <PageHeader badge="notices" title="공지" description="긴급공지와 대회 공지를 관리합니다." />
+      <PageNotice message={message} />
       <section className="settingsGrid">
         <section className="panel">
           <PanelTitle icon={<AlertTriangle />} title="긴급공지" />
@@ -5091,7 +5000,6 @@ function OperatorNoticesPage({
             <button onClick={saveNotice}><Pencil size={16} /> {selectedNoticeId ? "공지 수정" : "공지 작성"}</button>
             <button className="secondary" onClick={resetNoticeEditor}>새 공지</button>
           </div>
-          {message && <p className={message.includes("실패") || message.includes("입력") ? "submitMessage error" : "submitMessage done"}>{message}</p>}
         </section>
       </section>
       <section className="boardSplit">
@@ -5167,7 +5075,7 @@ function OperatorStaffPage({
     return (
       <section className="pageGrid">
         <StaffContestGate navigate={navigate} />
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} />
       </section>
     );
   }
@@ -5224,6 +5132,7 @@ function OperatorStaffPage({
   return (
     <section className="pageGrid">
       <PageHeader badge="staff" title="운영자" description="대회 운영자 계정을 추가, 수정, 제거합니다." />
+      <PageNotice message={message} />
       <section className="settingsGrid">
         <section className="panel">
           <PanelTitle icon={<ShieldCheck />} title={editingEmail ? "운영자 수정" : "운영자 추가"} />
@@ -5235,7 +5144,6 @@ function OperatorStaffPage({
             <button onClick={saveOperator}>{editingEmail ? <Pencil size={16} /> : <Plus size={16} />} {editingEmail ? "수정" : "추가"}</button>
             {editingEmail && <button className="secondary" onClick={resetEditor}>새 운영자</button>}
           </div>
-          {message && <p className={message.includes("실패") || message.includes("입력") ? "submitMessage error" : "submitMessage done"}>{message}</p>}
         </section>
         <section className="panel">
           <PanelTitle icon={<Lock />} title="권한 기준" />
@@ -5330,7 +5238,7 @@ function OperatorParticipantsPage({
     return (
       <section className="pageGrid">
         <StaffContestGate navigate={navigate} />
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} />
       </section>
     );
   }
@@ -5338,7 +5246,7 @@ function OperatorParticipantsPage({
     return (
       <section className="pageGrid">
         <PageHeader badge="participants" title="참가팀 관리" description="참가팀 목록을 불러오는 중입니다." />
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} status={status} />
       </section>
     );
   }
@@ -5541,6 +5449,7 @@ function OperatorParticipantsPage({
   return (
     <section className="pageGrid">
       <PageHeader badge="participants" title="참가팀 관리" description="대회 운영자가 팀과 참가자를 등록하고, 팀별 참가 유형을 필수로 지정합니다." />
+      <PageNotice message={message} status={status} />
       <section className="summaryGrid">
         <InfoCard icon={<Users />} title="참가팀" value={String(teams.length)} detail="registered teams" />
         <InfoCard icon={<Trophy />} title="참가 유형" value={String(divisions.length)} detail="required per team" />
@@ -5593,7 +5502,6 @@ function OperatorParticipantsPage({
             {editingTeamId && <button className="secondary" disabled={participantEditLocked} onClick={resetTeamEditor}>새 팀 등록으로 전환</button>}
             <button className="secondary" onClick={loadTeams}>목록 새로고침</button>
           </div>
-          {message && <p className={`submitMessage ${status === "error" ? "error" : "done"}`}>{message}</p>}
         </section>
         <section className="panel">
           <PanelTitle icon={<Database />} title="엑셀 파일 일괄 등록" />
@@ -5808,7 +5716,7 @@ function OperatorProblemsPage({
     return (
       <section className="pageGrid">
         <StaffContestGate navigate={navigate} />
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} />
       </section>
     );
   }
@@ -5816,7 +5724,7 @@ function OperatorProblemsPage({
     return (
       <section className="pageGrid">
         <PageHeader badge="problems" title="문제 관리" description="문제 목록을 불러오는 중입니다." />
-        {message && <p className="submitMessage error">{message}</p>}
+        <PageNotice message={message} status={status} />
       </section>
     );
   }
@@ -6857,6 +6765,7 @@ function OperatorProblemsPage({
   return (
     <section className="pageGrid">
       <PageHeader badge="problems" title="문제 관리" description="참가 유형별로 문제를 완전히 분리해 등록하고 수정합니다." />
+      <PageNotice message={message} status={status} />
       <section className="summaryGrid">
         <InfoCard icon={<FileCode2 />} title="문제" value={String(problems.length)} detail="all divisions" />
         <InfoCard icon={<Trophy />} title="현재 유형" value={selectedDivision.name} detail={`${filtered.length} problems`} />
@@ -6914,7 +6823,6 @@ function OperatorProblemsPage({
             </div>
           </div>
           <p className="panelNote">문제는 참가 유형에 귀속됩니다. 유형이 다르면 같은 문제 코드라도 별도 문제처럼 운영됩니다.</p>
-          {message && <p className={`submitMessage ${status === "error" ? "error" : "done"}`}>{message}</p>}
           {validationMessage && <p className="panelHint">{validationMessage}</p>}
           {editorMode === "edit" && packageWarnings.length > 0 && (
             <section className="problemHealthBanner">
@@ -7651,6 +7559,7 @@ function AdminPage({
         title={section === "home" ? "관리 홈" : section === "contests" ? "대회 관리" : "채점기 관리"}
         description={section === "home" ? "서비스 운영 요약과 공지를 관리합니다." : section === "contests" ? "대회 생성/수정과 운영자 연결을 관리합니다." : "채점 노드, 큐, 제출 로그를 관리합니다."}
       />
+      <PageNotice message={message} />
       {showHome && (
         <section className="summaryGrid">
           <InfoCard icon={<Trophy />} title="대회" value={String(dashboard?.contest_count ?? 0)} detail="total contests" />
@@ -7664,7 +7573,6 @@ function AdminPage({
           />
         </section>
       )}
-      {message && <p className="submitMessage error">{message}</p>}
       {showJudge && (
       <section className="panel">
         <div className="panelTitleRow">
@@ -7857,6 +7765,21 @@ function PageHeader({ badge, title, description }: { badge: string; title: strin
       <h1>{title}</h1>
       <p>{description}</p>
     </header>
+  );
+}
+
+function PageNotice({ message, status }: { message?: string; status?: "loading" | "ready" | "error" | "idle" }) {
+  if (!message) return null;
+  const tone = status === "error" || /실패|못했습니다|오류|입력|필요|불가|차단|권한이 없어|없습니다/.test(message)
+    ? "error"
+    : /중입니다|진행|준비|불러오는/.test(message)
+      ? "info"
+      : "done";
+  return (
+    <section className={`pageNotice ${tone}`} role={tone === "error" ? "alert" : "status"}>
+      {tone === "error" ? <AlertTriangle size={18} /> : tone === "done" ? <CheckCircle2 size={18} /> : <Activity size={18} />}
+      <span>{message}</span>
+    </section>
   );
 }
 

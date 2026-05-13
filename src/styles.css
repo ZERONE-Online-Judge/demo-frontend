@@ -2314,6 +2314,41 @@ pre {
   color: #8b5a00;
 }
 
+.pageNotice {
+  border: 1px solid #d6e4f3;
+  border-radius: 16px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: linear-gradient(135deg, #f8fbff, #eef6ff);
+  color: #24445f;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.pageNotice svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.pageNotice.done {
+  border-color: #bfe7cf;
+  background: linear-gradient(135deg, #f2fbf5, #e6f7ee);
+  color: #166534;
+}
+
+.pageNotice.error {
+  border-color: #f1c5c5;
+  background: linear-gradient(135deg, #fff7f7, #fdecec);
+  color: #991b1b;
+}
+
+.pageNotice.info {
+  border-color: #c7ddf5;
+  background: linear-gradient(135deg, #f7fbff, #edf6ff);
+  color: #1e4f7a;
+}
+
 .submitStatusBox {
   display: grid;
   gap: 3px;
@@ -4505,6 +4540,11 @@ body {
   width: fit-content;
 }
 
+.boardListPanel {
+  display: grid;
+  gap: 16px;
+}
+
 .boardStreamLayout {
   display: grid;
   grid-template-columns: minmax(0, 0.94fr) minmax(320px, 0.82fr);
@@ -4607,6 +4647,14 @@ body {
 .boardFocusPane {
   position: sticky;
   top: 18px;
+}
+
+.boardArticleModal {
+  width: min(980px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 48px));
+  overflow: auto;
+  display: grid;
+  gap: 18px;
 }
 
 .boardFocusHeader {
@@ -4777,6 +4825,95 @@ body {
   grid-column: 2;
   min-width: 0;
   width: 100%;
+}
+
+.problemLayout {
+  width: min(1500px, calc(100vw - 48px));
+  max-width: 1500px;
+  grid-template-columns: 260px minmax(0, 760px) minmax(360px, 460px);
+  justify-content: center;
+}
+
+.problemLayout.focusStatement,
+.readonlyProblemLayout,
+.readonlyProblemLayout.focusStatement,
+.readonlyProblemLayout.focusSubmit {
+  grid-template-columns: 260px minmax(0, 960px);
+}
+
+.problemLayout.focusSubmit {
+  grid-template-columns: 260px minmax(0, 960px);
+}
+
+.problemLayout.focusStatement .statementPanel,
+.readonlyProblemLayout .statementPanel,
+.problemLayout.focusSubmit .submitPanel {
+  grid-column: 2;
+  width: 100%;
+  max-width: 960px;
+}
+
+.problemLayout:not(.focusStatement):not(.focusSubmit):not(.readonlyProblemLayout) .statementPanel {
+  width: 100%;
+  max-width: 760px;
+}
+
+.problemLayout:not(.focusStatement):not(.focusSubmit) .submitPanel {
+  width: 100%;
+  max-width: 460px;
+}
+
+.problemNav,
+.readonlyProblemLayout .problemNav {
+  width: 260px;
+  max-width: 260px;
+}
+
+.problemNav button {
+  min-height: 48px;
+}
+
+@media (max-width: 1200px) {
+  .problemLayout,
+  .problemLayout.focusSubmit,
+  .problemLayout.focusStatement,
+  .readonlyProblemLayout,
+  .readonlyProblemLayout.focusStatement,
+  .readonlyProblemLayout.focusSubmit {
+    width: min(100%, calc(100vw - 32px));
+    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+    justify-content: stretch;
+  }
+
+  .problemNav,
+  .readonlyProblemLayout .problemNav {
+    width: 100%;
+    max-width: 260px;
+  }
+}
+
+@media (max-width: 960px) {
+  .problemLayout,
+  .problemLayout.focusSubmit,
+  .problemLayout.focusStatement,
+  .readonlyProblemLayout,
+  .readonlyProblemLayout.focusStatement,
+  .readonlyProblemLayout.focusSubmit {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .problemLayout.focusStatement .statementPanel,
+  .readonlyProblemLayout .statementPanel,
+  .problemLayout.focusSubmit .submitPanel,
+  .problemLayout:not(.focusStatement):not(.focusSubmit):not(.readonlyProblemLayout) .statementPanel,
+  .problemLayout:not(.focusStatement):not(.focusSubmit) .submitPanel,
+  .problemNav,
+  .readonlyProblemLayout .problemNav {
+    grid-column: auto;
+    width: 100%;
+    max-width: none;
+  }
 }
 
 .boardNoticeSummary {
