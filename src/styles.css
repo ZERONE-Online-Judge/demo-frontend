@@ -836,6 +836,44 @@ dd {
   font-weight: 800;
 }
 
+.problemTitleWithStatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.problemSolveBadge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.problemSolveBadge.accepted {
+  background: #e8f7ef;
+  color: #166534;
+}
+
+.problemSolveBadge.wrong {
+  background: #fff1f0;
+  color: #9f231b;
+}
+
+.problemSolveBadge.unsolved {
+  background: #eef2f7;
+  color: #475569;
+}
+
+.problemNavLabel {
+  min-width: 0;
+}
+
 .segmented {
   display: flex;
   gap: 8px;
@@ -3713,6 +3751,8 @@ button.textButton {
   border: 1px solid transparent;
   border-radius: 16px;
   background: transparent;
+  justify-content: space-between;
+  white-space: normal;
 }
 
 .problemNav button:hover:not(.active) {

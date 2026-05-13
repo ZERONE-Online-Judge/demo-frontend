@@ -86,6 +86,7 @@ type Problem = {
   memory_limit_mb: number;
   display_order?: number;
   max_score: number;
+  solve_status?: "accepted" | "wrong" | "unsolved";
 };
 type ProblemAsset = {
   asset_id: string;
@@ -1624,7 +1625,7 @@ function App() {
   }, [isContestArea, route.contestId, generalSession?.accessToken, activeParticipant?.accessToken, activeGeneralParticipant?.contest.contest_id, activeGeneralOperator?.contest.contest_id, page]);
 
   useEffect(() => {
-    if (!route.contestId || !canViewProblems || !["problemset", "problem", "contest"].includes(page)) return;
+    if (!route.contestId || !canViewProblems || !["problemset", "problem", "contest", "submissions"].includes(page)) return;
     let cancelled = false;
     async function loadContestProblems() {
       try {
@@ -1983,6 +1984,7 @@ function App() {
           contest={selectedContest}
           participant={activeParticipant}
           division={currentDivision}
+          problems={currentProblems}
           setDivisionId={setDivisionId}
           staffSession={activeGeneralOperator ? operatorStaffSession : null}
           openProblem={(id) => {
@@ -3111,7 +3113,7 @@ function ProblemSetPage({
         {pageItems.map((problem) => (
           <button className="problemRow" key={problem.problem_id} onClick={() => openProblem(problem.problem_id)}>
             <span className="problemCode">{problem.problem_code}</span>
-            <strong>{problem.title}</strong>
+            <strong className="problemTitleWithStatus">{problem.title}<ProblemSolveBadge status={problem.solve_status} /></strong>
             <span>{problem.time_limit_ms / 1000}s</span>
             <span>{problem.memory_limit_mb}MB</span>
             <span>{problem.max_score}점</span>
@@ -3420,7 +3422,8 @@ function ProblemPage({
             className={item.problem_id === activeProblem.problem_id ? "active" : ""}
             onClick={() => openProblem(item.problem_id)}
           >
-            {item.problem_code}. {item.title}
+            <span className="problemNavLabel">{item.problem_code}. {item.title}</span>
+            <ProblemSolveBadge status={item.solve_status} />
           </button>
         ))}
       </aside>
@@ -3484,6 +3487,7 @@ function SubmissionsPage({
   contest,
   participant,
   division,
+  problems,
   setDivisionId,
   staffSession,
   openProblem
@@ -3492,6 +3496,7 @@ function SubmissionsPage({
   contest: Contest;
   participant: ParticipantSession | null;
   division: Division;
+  problems: Problem[];
   setDivisionId: (id: string) => void;
   staffSession?: StaffSession | null;
   openProblem: (id: string) => void;
@@ -3510,8 +3515,15 @@ function SubmissionsPage({
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 20;
   const problemMap = useMemo(
-    () => new Map((api.problems[division.division_id] ?? api.problems[division.code] ?? Object.values(api.problems).flat()).map((problem) => [problem.problem_id, problem])),
-    [api.problems, division]
+    () => new Map(
+      sortProblemsByDisplayOrder([
+        ...problems,
+        ...(api.problems[division.division_id] ?? []),
+        ...(api.problems[division.code] ?? []),
+        ...Object.values(api.problems).flat()
+      ]).map((problem) => [problem.problem_id, problem])
+    ),
+    [api.problems, division, problems]
   );
   const filteredItems = useMemo(
     () => (staffSession ? items.filter((item) => !item.division_id || item.division_id === division.division_id) : items),
@@ -8131,6 +8143,12 @@ function ResultCell({
     return <span className="resultCell solved">{suffix}</span>;
   }
   return <span className="resultCell failed">-{problemScore.attempts}</span>;
+}
+
+function ProblemSolveBadge({ status }: { status?: Problem["solve_status"] }) {
+  if (status === "accepted") return <span className="problemSolveBadge accepted">정답</span>;
+  if (status === "wrong") return <span className="problemSolveBadge wrong">오답</span>;
+  return <span className="problemSolveBadge unsolved">미해결</span>;
 }
 
 function isSubmissionPending(status?: string | null) {
