@@ -788,6 +788,14 @@ function contestStatusLabel(status: string) {
   return status;
 }
 
+function contestAccessPhase(contest: Contest) {
+  if (isScheduleTbd(contest)) return "schedule_tbd";
+  const now = Date.now();
+  if (now < new Date(contest.start_at).getTime()) return "before";
+  if (now >= new Date(contest.end_at).getTime() || ["ended", "finalized", "archived"].includes(contest.status)) return "ended";
+  return "running";
+}
+
 function canViewContestResource(contest: Contest, hasSessionAccess: boolean, publicAfterEnd: boolean) {
   if (hasSessionAccess) return true;
   return isContestEnded(contest) && publicAfterEnd;
@@ -1509,6 +1517,7 @@ function App() {
   const canViewProblems = canViewContestResource(selectedContest, hasContestSessionAccess, publicVisibility.problems);
   const canViewScoreboard = canViewContestResource(selectedContest, hasContestSessionAccess, publicVisibility.scoreboard);
   const canViewSubmissions = canViewContestResource(selectedContest, hasContestSessionAccess, publicVisibility.submissions);
+  const problemAccessReason = problemVisibilityMessage(selectedContest, hasContestSessionAccess, publicVisibility.problems);
   const shellFacts = (() => {
     if (isContestArea || page === "scoreboard" || page === "board" || page === "problem" || page === "problemset" || page === "submissions") {
       return [
@@ -1913,9 +1922,11 @@ function App() {
         canViewProblems ? (
           <ProblemSetPage
             api={api}
+            contest={selectedContest}
             division={currentDivision}
             problems={currentProblems}
             locked={Boolean(activeParticipant || activeGeneralParticipant)}
+            hiddenReason={currentProblems.length ? undefined : participantProblemEmptyMessage(selectedContest, hasContestSessionAccess, publicVisibility.problems)}
             setDivisionId={setDivisionId}
             openProblem={(id) => {
               setProblemId(id);
@@ -1923,7 +1934,7 @@ function App() {
             }}
           />
         ) : (
-          <AccessGate contest={selectedContest} resource="문제집" navigate={navigate} />
+          <AccessGate contest={selectedContest} resource="문제집" navigate={navigate} reason={problemAccessReason} />
         )
       )}
       {page === "problem" && (
@@ -2974,6 +2985,7 @@ function ContestPage({
   const teamName = participant?.team.team_name ?? generalParticipant?.team.team_name ?? (operatorContest ? "운영 권한" : "로그인 필요");
   const divisionName = participant?.division.name ?? generalParticipant?.division.name ?? (operatorContest ? "운영자" : "등록된 참가 유형");
   const schedulePending = isScheduleTbd(contest);
+  const remaining = contestRemainingLabel(contest);
   return (
     <section className="pageGrid contestWorkspace">
       <section className="contestHero">
@@ -2984,21 +2996,21 @@ function ContestPage({
           <div className="contestHeroMeta">
             <span>{contest.organization_name}</span>
             <span>{schedulePending ? "일정 미정" : formatDate(contest.start_at)}</span>
-            <span>{schedulePending ? "remaining TBD" : `${timeLeft(contest.end_at)} left`}</span>
+            <span>{remaining}</span>
             <span>{divisionName}</span>
           </div>
         </div>
         <aside className="contestHeroAside">
           <InfoCard icon={<Users />} title="내 정보" value={memberName} detail={memberEmail} />
           <InfoCard icon={<Trophy />} title="팀 정보" value={teamName} detail={divisionName} />
-          <InfoCard icon={<Timer />} title="남은 시간" value={schedulePending ? "미정" : timeLeft(contest.end_at)} detail={schedulePending ? "일정 미정" : `freeze ${formatTime(contest.freeze_at)}`} />
+          <InfoCard icon={<Timer />} title="대회 시간" value={remaining} detail={schedulePending ? "일정 미정" : `freeze ${formatContestMoment(contest.freeze_at)}`} />
         </aside>
       </section>
     </section>
   );
 }
 
-function AccessGate({ contest, resource, navigate }: { contest: Contest; resource: string; navigate: (page: Page, options?: { contestId?: string; problemId?: string }) => void }) {
+function AccessGate({ contest, resource, navigate, reason }: { contest: Contest; resource: string; navigate: (page: Page, options?: { contestId?: string; problemId?: string }) => void; reason?: string }) {
   const ended = isContestEnded(contest);
   return (
     <section className="pageGrid">
@@ -3006,10 +3018,7 @@ function AccessGate({ contest, resource, navigate }: { contest: Contest; resourc
         <Lock size={34} />
         <span className="eyebrow">restricted</span>
         <h1>{resource} 접근 제한</h1>
-        <p>
-          비로그인 상태에서는 대회 전과 대회 중에 {resource}을 볼 수 없습니다.
-          {ended ? " 대회 종료 후에도 운영자가 공개 설정을 켠 항목만 공개됩니다." : " 참가팀 로그인 후 본인 참가 유형 기준으로만 접근할 수 있습니다."}
-        </p>
+        <p>{reason ?? `비로그인 상태에서는 대회 전과 대회 중에 ${resource}을 볼 수 없습니다.${ended ? " 대회 종료 후에도 운영자가 공개 설정을 켠 항목만 공개됩니다." : " 참가팀 로그인 후 본인 참가 유형 기준으로만 접근할 수 있습니다."}`}</p>
         <div className="buttonRow">
           <button onClick={() => navigate("participant-login", { contestId: contest.contest_id })}>
             <Mail size={16} />
@@ -3026,16 +3035,20 @@ function AccessGate({ contest, resource, navigate }: { contest: Contest; resourc
 
 function ProblemSetPage({
   api,
+  contest,
   division,
   problems,
   locked,
+  hiddenReason,
   setDivisionId,
   openProblem
 }: {
   api: ApiState;
+  contest: Contest;
   division: Division;
   problems: Problem[];
   locked: boolean;
+  hiddenReason?: string;
   setDivisionId: (id: string) => void;
   openProblem: (id: string) => void;
 }) {
@@ -3058,8 +3071,9 @@ function ProblemSetPage({
       <section className="problemList">
         {!problems.length && (
           <section className="panel emptyState">
-            <PanelTitle icon={<BookOpen />} title="등록된 문제가 없습니다" />
-            <p>이 참가 유형에는 아직 문제가 등록되지 않았습니다.</p>
+            <PanelTitle icon={<BookOpen />} title={hiddenReason ? "문제집 비공개" : "등록된 문제가 없습니다"} />
+            <p>{hiddenReason ?? "이 참가 유형에는 아직 문제가 등록되지 않았습니다."}</p>
+            {hiddenReason && <p className="panelNote">대회 시간: {contestRemainingLabel(contest)}</p>}
           </section>
         )}
         {pageItems.map((problem) => (
@@ -3837,6 +3851,7 @@ function ScoreboardPage({
     : effectiveDivision.division_id
     ? `${effectiveDivision.name} 유형 기준 순위입니다.`
     : "등록된 참가 유형이 없어 전체 스코어보드를 표시합니다.";
+  const remaining = contestRemainingLabel(contest);
 
   useEffect(() => {
     let cancelled = false;
@@ -3918,7 +3933,7 @@ function ScoreboardPage({
         </section>
       )}
       <section className="summaryGrid">
-        <InfoCard icon={<Timer />} title="남은 시간" value={timeLeft(contest.end_at)} detail={`freeze ${formatTime(contest.freeze_at)}`} />
+        <InfoCard icon={<Timer />} title="대회 시간" value={remaining} detail={`freeze ${formatContestMoment(contest.freeze_at)}`} />
         <InfoCard icon={<Lock />} title="프리징" value={frozen || isFrozen(contest) ? "ON" : "OFF"} detail="프리즈 시점 순위 노출" />
         <InfoCard icon={<Users />} title="팀 수" value={String(rows.length)} detail={division.name} />
         <InfoCard icon={<Activity />} title="큐" value={String(api.judgeStatus?.total_queue_depth ?? 0)} detail="pending jobs" />
@@ -4823,7 +4838,7 @@ function OperatorSettingsPage({
       <PageHeader badge="settings" title="대회 설정" description="기본 정보, 일정, 참가 유형, 종료 후 공개 정책을 관리합니다." />
       <section className="summaryGrid">
         <InfoCard icon={<CalendarDays />} title="상태" value={contestStatusLabel(contest.status)} detail="schedule_tbd/scheduled/running/ended" />
-        <InfoCard icon={<Timer />} title="남은 시간" value={isScheduleTbd(contest) ? "미정" : timeLeft(contest.end_at)} detail={isScheduleTbd(contest) ? "일정 미정" : `freeze ${formatTime(contest.freeze_at)}`} />
+        <InfoCard icon={<Timer />} title="대회 시간" value={contestRemainingLabel(contest)} detail={isScheduleTbd(contest) ? "일정 미정" : `freeze ${formatContestMoment(contest.freeze_at)}`} />
         <InfoCard icon={<Users />} title="참가 유형" value={String(divisions.length)} detail="team requires exactly one" />
         <InfoCard icon={<Lock />} title="공개 설정" value={publicVisibility.scoreboard ? "ON" : "OFF"} detail="종료 후 공개" />
       </section>
@@ -8292,12 +8307,52 @@ function formatTime(value?: string | null) {
   return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date(value));
 }
 
+function isSameLocalDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatContestMoment(value?: string | null) {
+  if (!value) return "-";
+  const date = new Date(value);
+  const now = new Date();
+  const time = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  if (isSameLocalDay(date, now)) return time;
+  const day = new Intl.DateTimeFormat("ko-KR", { month: "numeric", day: "numeric" }).format(date).replace(/\s/g, "");
+  return `${day} ${time}`;
+}
+
 function timeLeft(endAt: string) {
   const diff = Math.max(0, new Date(endAt).getTime() - Date.now());
   const hours = Math.floor(diff / 3600000);
   const minutes = Math.floor((diff % 3600000) / 60000);
   const seconds = Math.floor((diff % 60000) / 1000);
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m ${seconds}s`;
+}
+
+function contestRemainingLabel(contest: Contest) {
+  const phase = contestAccessPhase(contest);
+  if (phase === "schedule_tbd") return "일정 미정";
+  if (phase === "before") return `시작까지 ${timeLeft(contest.start_at)}`;
+  if (phase === "ended") return "종료됨";
+  return `종료까지 ${timeLeft(contest.end_at)}`;
+}
+
+function problemVisibilityMessage(contest: Contest, hasSessionAccess: boolean, publicAfterEnd: boolean) {
+  if (hasSessionAccess || (isContestEnded(contest) && publicAfterEnd)) return undefined;
+  const phase = contestAccessPhase(contest);
+  if (phase === "schedule_tbd") return "대회 일정이 아직 확정되지 않아 문제집이 비공개 상태입니다.";
+  if (phase === "before") return "대회 시작 전이라 문제집이 비공개 상태입니다.";
+  if (phase === "ended") return "대회가 종료되어 문제집이 비공개 상태입니다. 운영자가 종료 후 문제 공개를 켜면 열람할 수 있습니다.";
+  return "대회 중에는 참가팀 로그인 후 본인 참가 유형의 문제집만 볼 수 있습니다.";
+}
+
+function participantProblemEmptyMessage(contest: Contest, hasSessionAccess: boolean, publicAfterEnd: boolean) {
+  const phase = contestAccessPhase(contest);
+  if (phase === "schedule_tbd") return "대회 일정이 아직 확정되지 않아 문제집이 공개되지 않았습니다.";
+  if (phase === "before") return "대회 시작 전이라 문제집이 아직 공개되지 않았습니다.";
+  if (phase === "ended" && !publicAfterEnd) return "대회가 종료되어 문제집이 비공개 상태입니다.";
+  if (!hasSessionAccess) return "문제집을 보려면 참가팀 로그인이 필요합니다.";
+  return undefined;
 }
 
 function parseJudgeDetail(message?: string | null) {
