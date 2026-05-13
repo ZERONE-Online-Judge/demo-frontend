@@ -1977,7 +1977,20 @@ function App() {
           <AccessGate contest={selectedContest} resource="문제" navigate={navigate} />
         )
       )}
-      {page === "submissions" && (canViewSubmissions ? <SubmissionsPage api={api} contest={selectedContest} participant={activeParticipant} division={currentDivision} setDivisionId={setDivisionId} staffSession={activeGeneralOperator ? operatorStaffSession : null} /> : <AccessGate contest={selectedContest} resource="제출 현황" navigate={navigate} />)}
+      {page === "submissions" && (canViewSubmissions ? (
+        <SubmissionsPage
+          api={api}
+          contest={selectedContest}
+          participant={activeParticipant}
+          division={currentDivision}
+          setDivisionId={setDivisionId}
+          staffSession={activeGeneralOperator ? operatorStaffSession : null}
+          openProblem={(id) => {
+            setProblemId(id);
+            navigate("problem", { contestId: selectedContest.contest_id, problemId: id });
+          }}
+        />
+      ) : <AccessGate contest={selectedContest} resource="제출 현황" navigate={navigate} />)}
       {page === "scoreboard" && (canViewScoreboard ? <ScoreboardPage api={api} contest={selectedContest} participant={activeParticipant} division={currentDivision} locked={Boolean(activeParticipant || activeGeneralParticipant)} staffSession={activeGeneralOperator ? operatorStaffSession : null} setDivisionId={setDivisionId} /> : <AccessGate contest={selectedContest} resource="스코어보드" navigate={navigate} />)}
       {page === "board" && <BoardPage api={api} contest={selectedContest} participant={activeParticipant} staffSession={activeGeneralOperator ? operatorStaffSession : null} />}
       {page === "judge-status" && <JudgeStatusPage api={api} />}
@@ -3472,7 +3485,8 @@ function SubmissionsPage({
   participant,
   division,
   setDivisionId,
-  staffSession
+  staffSession,
+  openProblem
 }: {
   api: ApiState;
   contest: Contest;
@@ -3480,6 +3494,7 @@ function SubmissionsPage({
   division: Division;
   setDivisionId: (id: string) => void;
   staffSession?: StaffSession | null;
+  openProblem: (id: string) => void;
 }) {
   useClockTick();
   const [items, setItems] = useState<Submission[]>([]);
@@ -3488,6 +3503,9 @@ function SubmissionsPage({
   const [selectedSubmissionId, setSelectedSubmissionId] = useState("");
   const [submissionModalOpen, setSubmissionModalOpen] = useState(false);
   const [selectedSubmissionDetail, setSelectedSubmissionDetail] = useState<Submission | null>(null);
+  const [sourceModalOpen, setSourceModalOpen] = useState(false);
+  const [sourceSubmissionId, setSourceSubmissionId] = useState("");
+  const [sourceSubmissionDetail, setSourceSubmissionDetail] = useState<Submission | null>(null);
   const [pageIndex, setPageIndex] = useState(() => readPageQuery(1));
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 20;
@@ -3640,6 +3658,39 @@ function SubmissionsPage({
   }, [contest.contest_id, selectedSubmissionId, staffSession?.accessToken, submissionModalOpen]);
 
   useEffect(() => {
+    let cancelled = false;
+    async function loadSourceSubmission() {
+      if (!sourceModalOpen || !sourceSubmissionId) {
+        setSourceSubmissionDetail(null);
+        return;
+      }
+      try {
+        const detail = staffSession
+          ? await apiRequest<Submission>(
+              `/operator/contests/${contest.contest_id}/submissions/${sourceSubmissionId}`,
+              staffSession.accessToken
+            )
+          : participant
+            ? await apiRequest<Submission>(
+                `/contests/${contest.contest_id}/submissions/${sourceSubmissionId}`,
+                participant.accessToken
+              )
+            : null;
+        if (!cancelled) setSourceSubmissionDetail(detail);
+      } catch (error) {
+        if (!cancelled) {
+          setSourceSubmissionDetail(null);
+          setMessage(formatApiError(error, "제출 코드를 불러오지 못했습니다"));
+        }
+      }
+    }
+    loadSourceSubmission();
+    return () => {
+      cancelled = true;
+    };
+  }, [contest.contest_id, participant?.accessToken, sourceModalOpen, sourceSubmissionId, staffSession?.accessToken]);
+
+  useEffect(() => {
     const path = window.location.pathname;
     if (!path.includes("/submissions") && !path.includes("/submission")) return;
     const query = new URLSearchParams(window.location.search);
@@ -3651,9 +3702,16 @@ function SubmissionsPage({
   const solvedCount = filteredItems.filter((item) => item.status === "accepted").length;
   const judgingCount = filteredItems.filter((item) => ["waiting", "preparing", "judging"].includes(item.status)).length;
   const selectedSubmission = selectedSubmissionDetail ?? filteredItems.find((item) => item.submission_id === selectedSubmissionId) ?? filteredItems[0] ?? null;
+  const sourceSubmission = sourceSubmissionDetail ?? filteredItems.find((item) => item.submission_id === sourceSubmissionId) ?? null;
   const safePage = Math.max(1, pageIndex);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const pagedItems = filteredItems;
+  const openSubmissionSource = (submissionId: string) => {
+    setSourceSubmissionId(submissionId);
+    setSourceSubmissionDetail(null);
+    setSourceModalOpen(true);
+  };
+  const problemLabel = (problem?: Problem, fallbackId?: string) => problem ? `${problem.problem_code}. ${problem.title}` : fallbackId?.slice(0, 8) ?? "-";
 
   return (
     <section className="pageGrid">
@@ -3676,12 +3734,22 @@ function SubmissionsPage({
           columns={staffSession ? ["제출 번호", "팀", "문제", "언어", "상태", "점수", "제출 시간", "상세"] : ["제출 번호", "문제", "언어", "상태", "점수", "제출 시간", "코드 길이", "재채점"]}
           rows={pagedItems.map((item) => {
             const problem = problemMap.get(item.problem_id);
+            const problemCell = (
+              <button className="textButton tableLink" onClick={() => openProblem(item.problem_id)}>
+                {problemLabel(problem, item.problem_id)}
+              </button>
+            );
+            const languageCell = (
+              <button className="textButton tableLink" onClick={() => openSubmissionSource(item.submission_id)}>
+                {item.language}
+              </button>
+            );
             if (staffSession) {
               return [
                 item.submission_id.slice(0, 8),
                 item.team_name ?? item.participant_team_id?.slice(0, 8) ?? "-",
-                problem ? `${problem.problem_code}. ${problem.title}` : item.problem_id.slice(0, 8),
-                item.language,
+                problemCell,
+                languageCell,
                 <SubmissionStatusBadge submission={item} compact />,
                 item.awarded_score ?? "-",
                 <time title={formatDate(item.submitted_at)}>{formatRelativeTime(item.submitted_at)}</time>,
@@ -3690,8 +3758,8 @@ function SubmissionsPage({
             }
             return [
               item.submission_id.slice(0, 8),
-              problem ? `${problem.problem_code}. ${problem.title}` : item.problem_id.slice(0, 8),
-              item.language,
+              problemCell,
+              languageCell,
               <SubmissionStatusBadge submission={item} compact />,
               item.awarded_score ?? "-",
               <time title={formatDate(item.submitted_at)}>{formatRelativeTime(item.submitted_at)}</time>,
@@ -3702,6 +3770,32 @@ function SubmissionsPage({
         />
         {filteredItems.length > 0 && <SimplePagination page={safePage} totalPages={totalPages} onChange={setPageIndex} />}
         </div>
+        {sourceModalOpen && sourceSubmission && (
+          <div className="modalOverlay" onClick={() => setSourceModalOpen(false)}>
+            <aside className="panel submissionInspector modalPanel" onClick={(event) => event.stopPropagation()}>
+              <div className="panelTitleRow">
+                <PanelTitle icon={<Code2 />} title="제출 코드" />
+                <div className="tableActions">
+                  <button
+                    className="secondary"
+                    onClick={() => navigator.clipboard.writeText(sourceSubmission.source_code ?? "")}
+                    disabled={!sourceSubmission.source_code}
+                  >
+                    <Clipboard size={14} /> 복사
+                  </button>
+                  <button className="secondary" onClick={() => setSourceModalOpen(false)}>닫기</button>
+                </div>
+              </div>
+              <section className="previewMetaGrid">
+                <div className="previewMetaItem"><span>문제</span><strong>{problemLabel(problemMap.get(sourceSubmission.problem_id), sourceSubmission.problem_id)}</strong></div>
+                <div className="previewMetaItem"><span>언어</span><strong>{sourceSubmission.language}</strong></div>
+                <div className="previewMetaItem"><span>제출 시각</span><strong>{formatDate(sourceSubmission.submitted_at)}</strong></div>
+                <div className="previewMetaItem"><span>결과</span><strong>{submissionStatusLabel(sourceSubmission.status)}</strong></div>
+              </section>
+              <pre className="sourcePreview">{sourceSubmission.source_code || "제출 코드를 불러오는 중입니다."}</pre>
+            </aside>
+          </div>
+        )}
         {staffSession && submissionModalOpen && selectedSubmission && (
           <div className="modalOverlay" onClick={() => setSubmissionModalOpen(false)}>
           <aside className="panel submissionInspector modalPanel" onClick={(event) => event.stopPropagation()}>
@@ -8069,6 +8163,11 @@ function submissionStatusLabel(status?: string | null) {
       return "메모리 초과";
     case "output_limit_exceeded":
       return "출력 초과";
+    case "presentation_error":
+    case "output_format_error":
+      return "출력 형식 오류";
+    case "system_error":
+      return "시스템 에러";
     default:
       return status ?? "미제출";
   }
@@ -8080,15 +8179,21 @@ function submissionStatusTone(status?: string | null) {
       return "success";
     case "waiting":
     case "preparing":
-    case "judging":
       return "pending";
+    case "judging":
+      return "running";
     case "wrong_answer":
-    case "compile_error":
-    case "runtime_error":
     case "time_limit_exceeded":
     case "memory_limit_exceeded":
     case "output_limit_exceeded":
+    case "presentation_error":
+    case "output_format_error":
       return "danger";
+    case "runtime_error":
+      return "runtime";
+    case "compile_error":
+    case "system_error":
+      return "neutral";
     default:
       return "neutral";
   }

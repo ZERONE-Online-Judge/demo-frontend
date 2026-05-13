@@ -2469,9 +2469,35 @@ pre {
   color: #8b5a00;
 }
 
+.submissionVerdictPill.running {
+  background: #fff0df;
+  color: #c2410c;
+}
+
 .submissionVerdictPill.danger {
   background: #fff1f0;
   color: #9f231b;
+}
+
+.submissionVerdictPill.runtime {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.submissionVerdictPill.neutral {
+  background: #eef2f7;
+  color: #475569;
+}
+
+.tableLink {
+  color: #1769d2;
+  font-weight: 700;
+  text-align: left;
+  white-space: normal;
+}
+
+.tableLink:hover {
+  text-decoration: underline;
 }
 
 .submissionProgressWrap {
@@ -2507,8 +2533,20 @@ pre {
   background: #e0a800;
 }
 
+.submissionProgressBar > span.running {
+  background: #f97316;
+}
+
 .submissionProgressBar > span.danger {
   background: #d14343;
+}
+
+.submissionProgressBar > span.runtime {
+  background: #9333ea;
+}
+
+.submissionProgressBar > span.neutral {
+  background: #64748b;
 }
 
 .mutedText {
