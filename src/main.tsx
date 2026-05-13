@@ -202,6 +202,7 @@ type Submission = {
   awarded_score: number | null;
   submitted_at: string;
   source_code?: string;
+  source_code_length?: number;
   compile_message?: string | null;
   judge_message?: string | null;
   failed_testcase_order?: number | null;
@@ -3716,6 +3717,10 @@ function SubmissionsPage({
   const safePage = Math.max(1, pageIndex);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const pagedItems = filteredItems;
+  const sourceLengthLabel = (item: Submission) => {
+    const length = item.source_code_length ?? (item.source_code ? new Blob([item.source_code]).size : null);
+    return typeof length === "number" ? `${length.toLocaleString()} B` : "-";
+  };
   const openSubmissionSource = (submissionId: string) => {
     setSourceSubmissionId(submissionId);
     setSourceSubmissionDetail(null);
@@ -3771,7 +3776,7 @@ function SubmissionsPage({
               languageCell,
               <SubmissionStatusBadge submission={item} compact />,
               <time title={formatDate(item.submitted_at)}>{formatRelativeTime(item.submitted_at)}</time>,
-              item.source_code ? `${item.source_code.length} B` : "-"
+              sourceLengthLabel(item)
             ];
           })}
         />
@@ -8122,12 +8127,15 @@ function ResultCell({
 }: {
   problemScore?: { attempts: number; wrong_attempts: number; solved: boolean };
 }) {
-  if (!problemScore || problemScore.attempts <= 0) {
+  if (!problemScore) {
     return <span className="resultCell empty" aria-label="제출 없음" />;
   }
   if (problemScore.solved) {
     const suffix = problemScore.wrong_attempts > 0 ? `+${problemScore.wrong_attempts}` : "+";
     return <span className="resultCell solved">{suffix}</span>;
+  }
+  if (problemScore.attempts <= 0) {
+    return <span className="resultCell empty" aria-label="제출 없음" />;
   }
   return <span className="resultCell failed">-{problemScore.attempts}</span>;
 }
