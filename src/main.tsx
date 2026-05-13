@@ -87,6 +87,8 @@ type Problem = {
   display_order?: number;
   max_score?: number;
   solve_status?: "accepted" | "wrong" | "unsolved";
+  solved_team_count?: number;
+  total_team_count?: number;
 };
 type ProblemAsset = {
   asset_id: string;
@@ -1993,6 +1995,7 @@ function App() {
             locked={Boolean(activeParticipant || activeGeneralParticipant)}
             hiddenReason={currentProblems.length ? undefined : participantProblemEmptyMessage(selectedContest, hasContestSessionAccess, publicVisibility.problems)}
             setDivisionId={setDivisionId}
+            operatorView={Boolean(activeGeneralOperator)}
             openProblem={(id) => {
               setProblemId(id);
               navigate("problem", { contestId: selectedContest.contest_id, problemId: id });
@@ -3002,7 +3005,8 @@ function ProblemSetPage({
   locked,
   hiddenReason,
   setDivisionId,
-  openProblem
+  openProblem,
+  operatorView = false
 }: {
   api: ApiState;
   contest: Contest;
@@ -3012,6 +3016,7 @@ function ProblemSetPage({
   hiddenReason?: string;
   setDivisionId: (id: string) => void;
   openProblem: (id: string) => void;
+  operatorView?: boolean;
 }) {
   const pageSize = 12;
   const [pageIndex, setPageIndex] = useState(() => readPageQuery(1));
@@ -3041,7 +3046,7 @@ function ProblemSetPage({
         {pageItems.map((problem) => (
           <button className="problemRow" key={problem.problem_id} onClick={() => openProblem(problem.problem_id)}>
             <span className="problemCode">{problem.problem_code}</span>
-            <strong className="problemTitleWithStatus">{problem.title}<ProblemSolveBadge status={problem.solve_status} /></strong>
+            <strong className="problemTitleWithStatus">{problem.title}<ProblemSolveBadge status={problem.solve_status} problem={operatorView ? problem : undefined} /></strong>
             <span>{problem.time_limit_ms / 1000}s</span>
             <span>{problem.memory_limit_mb}MB</span>
             <ChevronRight size={16} />
@@ -3350,7 +3355,7 @@ function ProblemPage({
             onClick={() => openProblem(item.problem_id)}
           >
             <span className="problemNavLabel">{item.problem_code}. {item.title}</span>
-            <ProblemSolveBadge status={item.solve_status} />
+            <ProblemSolveBadge status={item.solve_status} problem={staffSession ? item : undefined} />
           </button>
         ))}
       </aside>
@@ -8072,7 +8077,12 @@ function ResultCell({
   return <span className="resultCell failed">-{problemScore.attempts}</span>;
 }
 
-function ProblemSolveBadge({ status }: { status?: Problem["solve_status"] }) {
+function ProblemSolveBadge({ status, problem }: { status?: Problem["solve_status"]; problem?: Problem }) {
+  if (problem) {
+    const solved = Math.max(0, problem.solved_team_count ?? 0);
+    const total = Math.max(0, problem.total_team_count ?? 0);
+    return <span className="problemSolveBadge accepted">해결 {solved}/{total}팀</span>;
+  }
   if (status === "accepted") return <span className="problemSolveBadge accepted">정답</span>;
   if (status === "wrong") return <span className="problemSolveBadge wrong">오답</span>;
   return <span className="problemSolveBadge unsolved">미해결</span>;
