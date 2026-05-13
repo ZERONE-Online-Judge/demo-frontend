@@ -1520,6 +1520,32 @@ function App() {
   const selectedContest = resolvedContest ?? emptyContest(route.contestId);
   const operatorCandidate = generalSession?.operatorSession;
   const operatorStaffSession = isValidStaffSession(operatorCandidate) ? operatorCandidate : null;
+  const generalOperatorStaffSession = useMemo<StaffSession | null>(() => {
+    if (!generalSession || generalSession.operatorContests.length === 0) return null;
+    if (operatorStaffSession) {
+      return {
+        ...operatorStaffSession,
+        accessToken: generalSession.accessToken,
+        refreshToken: generalSession.refreshToken
+      };
+    }
+    const contestScopes = generalSession.operatorContests.reduce<Record<string, string[]>>((scopes, entry) => {
+      scopes[entry.contest.contest_id] = entry.scopes;
+      return scopes;
+    }, {});
+    const isServiceMaster = generalSession.operatorContests.some((entry) => entry.scopes.includes("master"));
+    return {
+      accessToken: generalSession.accessToken,
+      refreshToken: generalSession.refreshToken,
+      staff: {
+        email: generalSession.account.email,
+        display_name: generalSession.account.display_name,
+        is_service_master: isServiceMaster,
+        contest_scopes: contestScopes
+      },
+      defaultRedirect: isServiceMaster ? "/admin" : "/operator"
+    };
+  }, [generalSession, operatorStaffSession]);
   const activeParticipant = participant?.contestId === selectedContest.contest_id ? participant : null;
   const activeGeneralParticipant = generalSession?.participantContests.find((entry) => entry.contest.contest_id === selectedContest.contest_id) ?? null;
   const activeGeneralOperator = generalSession?.operatorContests.find((entry) => entry.contest.contest_id === selectedContest.contest_id) ?? null;
@@ -1533,7 +1559,7 @@ function App() {
   const contestScopedPages: Page[] = ["participant-login", "contest", "problemset", "problem", "submissions", "scoreboard", "board"];
   const isContestArea = contestScopedPages.includes(page) && Boolean(route.contestId);
   const operatorContestScoped = Boolean(activeGeneralOperator && isContestArea && page !== "participant-login");
-  const activeStaffSession = operatorStaffSession && (isOperatorPage(page) || page === "admin" || page === "admin-home" || page === "admin-contests" || page === "admin-judge" || operatorContestScoped) ? operatorStaffSession : null;
+  const activeStaffSession = generalOperatorStaffSession && (isOperatorPage(page) || page === "admin" || page === "admin-home" || page === "admin-contests" || page === "admin-judge" || operatorContestScoped) ? generalOperatorStaffSession : null;
   const hasParticipantAccess = Boolean(activeParticipant || activeGeneralParticipant);
   const hasContestSessionAccess = Boolean(activeParticipant || activeGeneralParticipant || activeGeneralOperator);
   const canViewProblems = canViewContestResource(selectedContest, hasContestSessionAccess, publicVisibility.problems);
@@ -1638,8 +1664,8 @@ function App() {
     let cancelled = false;
     async function loadContestProblems() {
       try {
-        if (activeGeneralOperator && operatorStaffSession) {
-          const data = sortProblemsByDisplayOrder(await apiRequest<Problem[]>(`/operator/contests/${selectedContest.contest_id}/problems`, operatorStaffSession.accessToken));
+        if (activeGeneralOperator && generalOperatorStaffSession) {
+          const data = sortProblemsByDisplayOrder(await apiRequest<Problem[]>(`/operator/contests/${selectedContest.contest_id}/problems`, generalOperatorStaffSession.accessToken));
           if (!cancelled) {
             const grouped = data.reduce<Record<string, Problem[]>>((groups, item) => {
               const key = item.division_id ?? "";
@@ -1678,7 +1704,7 @@ function App() {
     currentDivision.division_id,
     activeParticipant?.accessToken,
     activeGeneralOperator?.contest.contest_id,
-    operatorStaffSession?.accessToken
+    generalOperatorStaffSession?.accessToken
   ]);
 
   useEffect(() => {
@@ -1976,7 +2002,7 @@ function App() {
             generalSession={generalSession}
             problem={currentProblem}
             problems={currentProblems}
-            staffSession={activeGeneralOperator ? operatorStaffSession : null}
+            staffSession={activeGeneralOperator ? generalOperatorStaffSession : null}
             openProblem={(id) => {
               setProblemId(id);
               navigate("problem", { contestId: selectedContest.contest_id, problemId: id });
@@ -1995,15 +2021,15 @@ function App() {
           division={currentDivision}
           problems={currentProblems}
           setDivisionId={setDivisionId}
-          staffSession={activeGeneralOperator ? operatorStaffSession : null}
+          staffSession={activeGeneralOperator ? generalOperatorStaffSession : null}
           openProblem={(id) => {
             setProblemId(id);
             navigate("problem", { contestId: selectedContest.contest_id, problemId: id });
           }}
         />
       ) : <AccessGate contest={selectedContest} resource="제출 현황" navigate={navigate} />)}
-      {page === "scoreboard" && (canViewScoreboard ? <ScoreboardPage api={api} contest={selectedContest} participant={activeParticipant} division={currentDivision} locked={Boolean(activeParticipant || activeGeneralParticipant)} staffSession={activeGeneralOperator ? operatorStaffSession : null} setDivisionId={setDivisionId} /> : <AccessGate contest={selectedContest} resource="스코어보드" navigate={navigate} />)}
-      {page === "board" && <BoardPage api={api} contest={selectedContest} participant={activeParticipant} staffSession={activeGeneralOperator ? operatorStaffSession : null} />}
+      {page === "scoreboard" && (canViewScoreboard ? <ScoreboardPage api={api} contest={selectedContest} participant={activeParticipant} division={currentDivision} locked={Boolean(activeParticipant || activeGeneralParticipant)} staffSession={activeGeneralOperator ? generalOperatorStaffSession : null} setDivisionId={setDivisionId} /> : <AccessGate contest={selectedContest} resource="스코어보드" navigate={navigate} />)}
+      {page === "board" && <BoardPage api={api} contest={selectedContest} participant={activeParticipant} staffSession={activeGeneralOperator ? generalOperatorStaffSession : null} />}
       {page === "judge-status" && <JudgeStatusPage api={api} />}
       {page === "operator" && (activeStaffSession ? <OperatorPage contestId={route.contestId} staffSession={activeStaffSession} setDivisionId={setDivisionId} navigate={navigate} onLogout={logoutGeneral} /> : <StaffAccessGate loginPage="operator-login" message={generalSessionMessage} navigate={navigate} />)}
       {page === "operator-settings" && (activeStaffSession ? <OperatorSettingsPage contestId={route.contestId} staffSession={activeStaffSession} navigate={navigate} /> : <StaffAccessGate loginPage="operator-login" message={generalSessionMessage} navigate={navigate} />)}
@@ -3416,7 +3442,7 @@ function SubmissionsPage({
     [api.problems, division, problems]
   );
   const filteredItems = useMemo(
-    () => (staffSession ? items.filter((item) => !item.division_id || item.division_id === division.division_id) : items),
+    () => (staffSession && division.division_id ? items.filter((item) => !item.division_id || item.division_id === division.division_id) : items),
     [items, staffSession, division.division_id]
   );
   const pendingSubmissionIds = useMemo(
