@@ -2521,6 +2521,7 @@ th {
   align-items: center;
   gap: 5px;
   min-width: 46px;
+  min-height: 28px;
   justify-content: center;
 }
 
@@ -2535,8 +2536,9 @@ th {
 }
 
 .resultCell.empty {
-  background: #eef3f7;
-  color: #64748b;
+  background: #ffffff;
+  color: transparent;
+  border: 1px solid #edf1f5;
 }
 
 .resultCell small {

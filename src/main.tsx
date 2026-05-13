@@ -3924,7 +3924,7 @@ function ScoreboardPage({
         <InfoCard icon={<Activity />} title="큐" value={String(api.judgeStatus?.total_queue_depth ?? 0)} detail="pending jobs" />
       </section>
       {message && <p className={`submitMessage ${message.includes("실패") ? "error" : "done"}`}>{message}</p>}
-      <p className="panelNote">문제 칸 표기: +(1트 정답), +n(정답 전 오답 n회), -n(오답 n회, 미해결). 오른쪽 작은 숫자는 현재 점수입니다.</p>
+      <p className="panelNote">문제 칸 표기: 제출 없음은 빈칸, 오답은 -n, 정답은 + 또는 +n입니다.</p>
       <section className="panel">
         <table className="scoreboardTable">
           <thead>
@@ -8086,13 +8086,13 @@ function ResultCell({
   problemScore?: { score: number; max_score: number; attempts: number; wrong_attempts: number; solved: boolean };
 }) {
   if (!problemScore || problemScore.attempts <= 0) {
-    return <span className="resultCell empty">-<small>0</small></span>;
+    return <span className="resultCell empty" aria-label="제출 없음" />;
   }
   if (problemScore.solved || problemScore.score >= problemScore.max_score) {
     const suffix = problemScore.wrong_attempts > 0 ? `+${problemScore.wrong_attempts}` : "+";
-    return <span className="resultCell solved">{suffix}<small>{problemScore.score}</small></span>;
+    return <span className="resultCell solved">{suffix}</span>;
   }
-  return <span className="resultCell failed">-{problemScore.attempts}<small>{problemScore.score}</small></span>;
+  return <span className="resultCell failed">-{problemScore.attempts}</span>;
 }
 
 function isSubmissionPending(status?: string | null) {
