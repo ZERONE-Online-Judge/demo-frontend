@@ -551,7 +551,13 @@ async function refreshStaffAccessToken(token: string): Promise<string | null> {
           body: JSON.stringify({ refresh_token: operatorSession.refreshToken })
         });
         if (!response.ok) return null;
-        const refreshed = mapStaffSession(payload.data);
+        const refreshed = mapStaffSession({
+          ...operatorSession,
+          ...payload.data,
+          refresh_token: payload.data?.refresh_token ?? operatorSession.refreshToken,
+          staff: payload.data?.staff ?? operatorSession.staff,
+          default_redirect: payload.data?.default_redirect ?? operatorSession.defaultRedirect
+        });
         const nextGeneral: GeneralSession = { ...general, operatorSession: refreshed };
         saveGeneralSession(nextGeneral);
         emitSessionSync();
