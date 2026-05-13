@@ -3741,7 +3741,7 @@ function SubmissionsPage({
       <section className="panel">
         <div className="panel">
         <DataTable
-          columns={staffSession ? ["제출 번호", "팀", "문제", "언어", "상태", "제출 시간", "상세"] : ["제출 번호", "문제", "언어", "상태", "제출 시간", "코드 길이", "재채점"]}
+          columns={staffSession ? ["제출 번호", "팀", "문제", "언어", "상태", "제출 시간", "상세"] : ["제출 번호", "문제", "언어", "상태", "제출 시간", "코드 길이"]}
           rows={pagedItems.map((item) => {
             const problem = problemMap.get(item.problem_id);
             const problemCell = (
@@ -3771,8 +3771,7 @@ function SubmissionsPage({
               languageCell,
               <SubmissionStatusBadge submission={item} compact />,
               <time title={formatDate(item.submitted_at)}>{formatRelativeTime(item.submitted_at)}</time>,
-              item.source_code ? `${item.source_code.length} B` : "-",
-              "재채점 없음"
+              item.source_code ? `${item.source_code.length} B` : "-"
             ];
           })}
         />
