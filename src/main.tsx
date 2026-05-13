@@ -1549,15 +1549,18 @@ function App() {
   const activeParticipant = participant?.contestId === selectedContest.contest_id ? participant : null;
   const activeGeneralParticipant = generalSession?.participantContests.find((entry) => entry.contest.contest_id === selectedContest.contest_id) ?? null;
   const activeGeneralOperator = generalSession?.operatorContests.find((entry) => entry.contest.contest_id === selectedContest.contest_id) ?? null;
+  const contestScopedPages: Page[] = ["participant-login", "contest", "problemset", "problem", "submissions", "scoreboard", "board"];
+  const isContestArea = contestScopedPages.includes(page) && Boolean(route.contestId);
   const activeDivisionId = activeParticipant?.division.division_id ?? activeGeneralParticipant?.division.division_id ?? divisionId;
   const currentDivision = useMemo(
-    () => api.divisions.find((division) => division.division_id === activeDivisionId) ?? activeParticipant?.division ?? activeGeneralParticipant?.division ?? api.divisions[0] ?? emptyDivision(),
-    [api.divisions, activeDivisionId, activeParticipant, activeGeneralParticipant]
+    () => {
+      if (activeGeneralOperator && isContestArea && !activeDivisionId) return { ...emptyDivision(), name: "전체" };
+      return api.divisions.find((division) => division.division_id === activeDivisionId) ?? activeParticipant?.division ?? activeGeneralParticipant?.division ?? api.divisions[0] ?? emptyDivision();
+    },
+    [api.divisions, activeDivisionId, activeParticipant, activeGeneralParticipant, activeGeneralOperator, isContestArea]
   );
   const currentProblems = sortProblemsByDisplayOrder(participantProblems[currentDivision.division_id] ?? api.problems[currentDivision.division_id] ?? api.problems[currentDivision.code] ?? []);
   const currentProblem = currentProblems.find((item) => item.problem_id === problemId) ?? currentProblems[0];
-  const contestScopedPages: Page[] = ["participant-login", "contest", "problemset", "problem", "submissions", "scoreboard", "board"];
-  const isContestArea = contestScopedPages.includes(page) && Boolean(route.contestId);
   const operatorContestScoped = Boolean(activeGeneralOperator && isContestArea && page !== "participant-login");
   const activeStaffSession = generalOperatorStaffSession && (isOperatorPage(page) || page === "admin" || page === "admin-home" || page === "admin-contests" || page === "admin-judge" || operatorContestScoped) ? generalOperatorStaffSession : null;
   const hasParticipantAccess = Boolean(activeParticipant || activeGeneralParticipant);
@@ -1633,10 +1636,13 @@ function App() {
       if (divisionId !== activeGeneralParticipant.division.division_id) setDivisionId(activeGeneralParticipant.division.division_id);
       return;
     }
+    if (activeGeneralOperator && isContestArea) {
+      return;
+    }
     if (!api.divisions.length) return;
     const preferred = api.divisions[0];
     if (!api.divisions.some((division) => division.division_id === divisionId)) setDivisionId(preferred.division_id);
-  }, [activeParticipant, activeGeneralParticipant, api.divisions, divisionId]);
+  }, [activeParticipant, activeGeneralParticipant, activeGeneralOperator, api.divisions, divisionId, isContestArea]);
 
   useEffect(() => {
     if (currentProblem) setProblemId(currentProblem.problem_id);
@@ -3649,7 +3655,7 @@ function SubmissionsPage({
     <section className="pageGrid">
       <PageHeader badge="submissions" title="채점 현황" description="대회 중에는 로그인한 참가팀의 제출만 확인합니다." />
       {staffSession ? (
-        <Segmented options={api.divisions} value={division.division_id} onChange={setDivisionId} />
+        <Segmented options={api.divisions} value={division.division_id} onChange={setDivisionId} allLabel="전체" />
       ) : (
         <DivisionLock division={division} />
       )}
@@ -3796,7 +3802,7 @@ function ScoreboardPage({
   const [operatorDivisions, setOperatorDivisions] = useState<Division[]>([]);
   const canSelectDivision = Boolean(staffSession) || !locked;
   const divisionOptions = api.divisions.length ? api.divisions : operatorDivisions;
-  const effectiveDivision = division.division_id ? division : divisionOptions[0] ?? division;
+  const effectiveDivision = staffSession && !division.division_id ? division : division.division_id ? division : divisionOptions[0] ?? division;
   const fallbackRowsForDivision = api.scoreboard.filter((row) => !row.division || row.division === effectiveDivision.name);
   const rows = liveRows.length ? liveRows : fallbackRowsForDivision;
   const problemCodes = Array.from(new Set(rows.flatMap((row) => row.problem_scores.map((score) => score.problem_code)))).sort();
@@ -3804,6 +3810,8 @@ function ScoreboardPage({
   const endWarning = contestEndAnnouncement(contest);
   const scoreboardDescription = !canSelectDivision
     ? `로그인한 팀의 ${effectiveDivision.name} 참가 유형 순위만 표시합니다.`
+    : staffSession && !effectiveDivision.division_id
+    ? "전체 참가 유형 기준 순위입니다."
     : effectiveDivision.division_id
     ? `${effectiveDivision.name} 유형 기준 순위입니다.`
     : "등록된 참가 유형이 없어 전체 스코어보드를 표시합니다.";
@@ -3818,7 +3826,6 @@ function ScoreboardPage({
         if (cancelled) return;
         const sorted = [...data.divisions].sort((a, b) => a.name.localeCompare(b.name));
         setOperatorDivisions(sorted);
-        if (!division.division_id && sorted[0]) setDivisionId(sorted[0].division_id);
       } catch {
         // Keep the scoreboard usable via the contest-level operator endpoint.
       }
@@ -3872,7 +3879,7 @@ function ScoreboardPage({
     <section className="pageGrid">
       <PageHeader badge="scoreboard" title="스코어보드" description={scoreboardDescription} />
       {canSelectDivision ? (
-        <Segmented options={divisionOptions} value={effectiveDivision.division_id} onChange={setDivisionId} />
+        <Segmented options={divisionOptions} value={effectiveDivision.division_id} onChange={setDivisionId} allLabel={staffSession ? "전체" : undefined} />
       ) : (
         <DivisionLock division={effectiveDivision} />
       )}
@@ -8010,8 +8017,13 @@ function ExampleBox({ examples }: { examples: ProblemExample[] }) {
   );
 }
 
-function Segmented({ options, value, onChange }: { options: Division[]; value: string; onChange: (value: string) => void }) {
-  return <div className="segmented">{options.map((option) => <button key={option.division_id} className={value === option.division_id ? "active" : ""} onClick={() => onChange(option.division_id)}>{option.name}</button>)}</div>;
+function Segmented({ options, value, onChange, allLabel }: { options: Division[]; value: string; onChange: (value: string) => void; allLabel?: string }) {
+  return (
+    <div className="segmented">
+      {allLabel && <button className={!value ? "active" : ""} onClick={() => onChange("")}>{allLabel}</button>}
+      {options.map((option) => <button key={option.division_id} className={value === option.division_id ? "active" : ""} onClick={() => onChange(option.division_id)}>{option.name}</button>)}
+    </div>
+  );
 }
 
 function DivisionLock({ division }: { division: Division }) {
