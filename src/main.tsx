@@ -522,9 +522,8 @@ async function apiFetchRaw(path: string, token?: string, init?: RequestInit): Pr
 function canAttemptAutoRefresh(path: string) {
   if (!path.startsWith("/")) return false;
   if (path === "/auth/staff/refresh" || path === "/auth/general/refresh") return false;
-  if (path === "/auth/staff/login" || path === "/auth/general/otp/verify" || path === "/auth/staff/otp/verify" || path === "/auth/general/password/login" || path === "/auth/general/password/otp/verify" || path === "/auth/general/login-method") return false;
-  if (path === "/auth/general/password/otp/request") return false;
-  if (path === "/auth/general/otp/request" || path === "/auth/staff/otp/request") return false;
+  if (path === "/auth/general/otp/request" || path === "/auth/general/otp/verify") return false;
+  if (path === "/auth/staff/login" || path === "/auth/staff/otp/request" || path === "/auth/staff/otp/verify") return false;
   if (path === "/auth/staff/logout" || path === "/auth/general/logout") return false;
   return true;
 }
@@ -590,6 +589,9 @@ async function refreshOperatorAccessTokenViaGeneralSession(): Promise<string | n
 async function refreshStaffAccessToken(token: string): Promise<string | null> {
   const general = loadStoredGeneralSession();
   if (general?.operatorSession?.accessToken === token) {
+    if (general.accessToken === token) {
+      return refreshGeneralAccessToken(token);
+    }
     const operatorSession = general.operatorSession;
     if (!operatorSession.refreshToken) return null;
     if (!staffRefreshInFlight) {
@@ -1254,13 +1256,19 @@ function isValidStaffSession(session: unknown): session is StaffSession {
 }
 
 function mapGeneralSession(data: GeneralSessionApi, previous?: GeneralSession | null): GeneralSession {
+  const accessToken = data.access_token ?? previous?.accessToken ?? "";
+  const refreshToken = data.refresh_token ?? previous?.refreshToken ?? "";
+  const legacyOperatorSession = data.operator_session ? mapStaffSession(data.operator_session) : (previous?.operatorSession ?? null);
+  const operatorSession = legacyOperatorSession
+    ? { ...legacyOperatorSession, accessToken, refreshToken }
+    : null;
   return {
-    accessToken: data.access_token ?? previous?.accessToken ?? "",
-    refreshToken: data.refresh_token ?? previous?.refreshToken ?? "",
+    accessToken,
+    refreshToken,
     account: data.account,
     participantContests: data.participant_contests ?? [],
     operatorContests: data.operator_contests ?? [],
-    operatorSession: data.operator_session ? mapStaffSession(data.operator_session) : (previous?.operatorSession ?? null)
+    operatorSession
   };
 }
 
@@ -2716,8 +2724,6 @@ function GeneralLoginPage({
   message?: string;
 }) {
   const [email, setEmail] = useState("");
-  const [loginMethod, setLoginMethod] = useState<"otp" | "password" | null>(null);
-  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [message, setMessage] = useState("");
   const [otpRequested, setOtpRequested] = useState(false);
@@ -2731,30 +2737,6 @@ function GeneralLoginPage({
     const minutes = Math.floor(value / 60);
     const seconds = value % 60;
     return `${minutes}:${seconds.toString().padStart(2, "0")}`;
-  }
-
-  async function detectLoginMethod(autoRequestOtp = false) {
-    try {
-      const data = await apiRequest<{ method: "otp" | "password" }>(
-        "/auth/general/login-method",
-        undefined,
-        { method: "POST", body: JSON.stringify({ email }) }
-      );
-      setLoginMethod(data.method);
-      setOtpRequested(false);
-      setOtp("");
-      setPassword("");
-      setMessage(data.method === "password" ? "비밀번호 로그인 대상 계정입니다." : "");
-      if (data.method === "otp" && autoRequestOtp) {
-        await requestOtp();
-        return;
-      }
-      if (data.method === "otp") {
-        requestAnimationFrame(() => otpRef.current?.focus());
-      }
-    } catch (error) {
-      setMessage(formatApiError(error, "로그인 방식 확인 실패"));
-    }
   }
 
   async function requestOtp() {
@@ -2792,56 +2774,8 @@ function GeneralLoginPage({
     }
   }
 
-  async function loginWithPassword() {
-    setMessage("인증번호를 발송하고 있습니다.");
-    try {
-      await apiRequest<{ cooldown_seconds?: number }>(
-        "/auth/general/password/otp/request",
-        undefined,
-        { method: "POST", body: JSON.stringify({ email, password }) }
-      );
-      setCooldownUntil(Date.now() + 10 * 1000);
-      setOtpRequested(true);
-      setOtpExpiresAt(Date.now() + OTP_VALID_SECONDS * 1000);
-      setMessage("인증번호가 이메일로 발송되었습니다. 인증번호 유효시간은 5분입니다.");
-      requestAnimationFrame(() => otpRef.current?.focus());
-    } catch (error) {
-      const retryAfter = readRetryAfterSeconds(error);
-      if (retryAfter > 0) {
-        setCooldownUntil(Date.now() + retryAfter * 1000);
-      }
-      setMessage(formatApiError(error, "인증번호 발송 실패"));
-    }
-  }
-
-  async function verifyPasswordOtp() {
-    setMessage("로그인 중입니다.");
-    try {
-      const data = await apiRequest<GeneralSessionApi>(
-        "/auth/general/password/otp/verify",
-        undefined,
-        { method: "POST", body: JSON.stringify({ email, password, otp_code: otp }) }
-      );
-      await onLogin(mapGeneralSession(data), contest?.contest_id);
-    } catch (error) {
-      setMessage(formatApiError(error, "로그인 실패"));
-    }
-  }
-
   function submitParticipantLogin(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!loginMethod) {
-      detectLoginMethod(true);
-      return;
-    }
-    if (loginMethod === "password") {
-      if (otpRequested) {
-        verifyPasswordOtp();
-      } else {
-        loginWithPassword();
-      }
-      return;
-    }
     if (otpRequested) {
       verifyOtp();
     } else {
@@ -2881,7 +2815,7 @@ function GeneralLoginPage({
   }
 
   return (
-    <LoginShell title="로그인" subtitle="이메일 입력 후 OTP 또는 비밀번호로 로그인합니다." onSubmit={submitParticipantLogin}>
+    <LoginShell title="로그인" subtitle="이메일 인증번호 하나로 참가자, 운영자, 서비스 관리자 세션을 전환합니다." onSubmit={submitParticipantLogin}>
       {contest && (
         <div className="selectedContestBox">
           <strong>{contest.title}</strong>
@@ -2896,65 +2830,22 @@ function GeneralLoginPage({
         placeholder="등록된 이메일"
         onChange={(event) => {
           setEmail(event.target.value);
-          setLoginMethod(null);
           setOtpRequested(false);
           setOtp("");
-          setPassword("");
           setMessage("");
           setOtpExpiresAt(0);
         }}
       />
-      {!loginMethod && (
-        <button type="submit" disabled={!email.trim()}>
-          <Lock size={16} /> 다음
-        </button>
-      )}
-      {loginMethod === "password" && (
+      <button type={otpRequested ? "button" : "submit"} onClick={otpRequested ? requestOtp : undefined} disabled={!email.trim() || cooldownSeconds > 0}>
+        <Mail size={16} /> {cooldownSeconds > 0 ? `재전송 ${cooldownSeconds}초` : "인증번호 받기"}
+      </button>
+      {otpRequested && (
         <>
-          <label>비밀번호</label>
-          <input
-            type="password"
-            value={password}
-            disabled={otpRequested}
-            placeholder="비밀번호"
-            onChange={(event) => {
-              setPassword(event.target.value);
-              setOtpRequested(false);
-              setOtp("");
-              setCooldownUntil(0);
-              setOtpExpiresAt(0);
-            }}
-          />
-          <button type={otpRequested ? "button" : "submit"} onClick={otpRequested ? loginWithPassword : undefined} disabled={!email.trim() || !password.trim() || cooldownSeconds > 0}>
-            <Mail size={16} /> {cooldownSeconds > 0 ? `재전송 ${cooldownSeconds}초` : "인증번호 받기"}
-          </button>
-          {otpRequested && (
-            <>
-              <label>인증번호</label>
-              <input ref={otpRef} value={otp} placeholder="인증번호" onChange={(event) => setOtp(event.target.value)} />
-              <button type="submit" disabled={otpExpiresSeconds <= 0}><ShieldCheck size={16} /> 로그인</button>
-              <p className="panelNote">인증번호 유효시간: {otpExpiresSeconds > 0 ? formatSeconds(otpExpiresSeconds) : "만료 (재전송 필요)"}</p>
-            </>
-          )}
-          <div className="buttonRow">
-            <button type="button" className="secondary" onClick={() => { setLoginMethod(null); setOtpRequested(false); setOtp(""); setOtpExpiresAt(0); setCooldownUntil(0); }}>이메일 다시 입력</button>
-          </div>
-        </>
-      )}
-      {loginMethod === "otp" && (
-        <>
-          <button type={otpRequested ? "button" : "submit"} onClick={otpRequested ? requestOtp : undefined} disabled={!email.trim() || cooldownSeconds > 0}>
-            <Mail size={16} /> {cooldownSeconds > 0 ? `재전송 ${cooldownSeconds}초` : "인증번호 받기"}
-          </button>
-          {otpRequested && (
-            <>
-              <label>인증번호</label>
-              <input ref={otpRef} value={otp} placeholder="인증번호" onChange={(event) => setOtp(event.target.value)} />
-              <button type="submit" className="secondary" disabled={otpExpiresSeconds <= 0}><Lock size={16} /> 로그인</button>
-              <p className="panelNote">인증번호 유효시간: {otpExpiresSeconds > 0 ? formatSeconds(otpExpiresSeconds) : "만료 (재전송 필요)"}</p>
-            </>
-          )}
-          <button type="button" className="textButton" onClick={() => { setLoginMethod(null); setOtpRequested(false); setOtp(""); setOtpExpiresAt(0); setCooldownUntil(0); }}>이메일 다시 입력</button>
+          <label>인증번호</label>
+          <input ref={otpRef} value={otp} placeholder="인증번호" onChange={(event) => setOtp(event.target.value)} />
+          <button type="submit" className="secondary" disabled={otpExpiresSeconds <= 0}><Lock size={16} /> 로그인</button>
+          <p className="panelNote">인증번호 유효시간: {otpExpiresSeconds > 0 ? formatSeconds(otpExpiresSeconds) : "만료 (재전송 필요)"}</p>
+          <button type="button" className="textButton" onClick={() => { setOtpRequested(false); setOtp(""); setOtpExpiresAt(0); setCooldownUntil(0); }}>이메일 다시 입력</button>
         </>
       )}
       {message && <p className="formMessage">{message}</p>}
