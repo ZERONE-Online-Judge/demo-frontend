@@ -85,7 +85,7 @@ type Problem = {
   time_limit_ms: number;
   memory_limit_mb: number;
   display_order?: number;
-  max_score: number;
+  max_score?: number;
   solve_status?: "accepted" | "wrong" | "unsolved";
 };
 type ProblemAsset = {
@@ -178,16 +178,16 @@ type ScoreboardRow = {
   team_name: string;
   division: string | null;
   solved: number;
-  score: number;
+  penalty: number;
   submission_count: number;
-  last_improved_at: string | null;
+  last_solved_at?: string | null;
   problem_scores: {
+    problem_id?: string;
     problem_code: string;
-    score: number;
-    max_score: number;
     attempts: number;
     wrong_attempts: number;
     solved: boolean;
+    penalty?: number | null;
     best_status: string | null;
   }[];
 };
@@ -268,7 +268,7 @@ type AdminJudgeSubmissionEntry = {
   submission: Submission;
   contest?: { contest_id: string; title: string } | null;
   division?: { division_id: string; name: string } | null;
-  problem?: { problem_id: string; problem_code: string; title: string; time_limit_ms: number; memory_limit_mb: number; max_score: number } | null;
+  problem?: { problem_id: string; problem_code: string; title: string; time_limit_ms: number; memory_limit_mb: number } | null;
   team?: { participant_team_id: string; team_name: string } | null;
   member?: { team_member_id: string; name: string; email: string } | null;
   judge_job?: { judge_job_id: string; status: string; queue_position: number; assigned_node_id?: string | null; created_at: string } | null;
@@ -3116,7 +3116,6 @@ function ProblemSetPage({
             <strong className="problemTitleWithStatus">{problem.title}<ProblemSolveBadge status={problem.solve_status} /></strong>
             <span>{problem.time_limit_ms / 1000}s</span>
             <span>{problem.memory_limit_mb}MB</span>
-            <span>{problem.max_score}점</span>
             <ChevronRight size={16} />
           </button>
         ))}
@@ -3432,7 +3431,6 @@ function ProblemPage({
         <div className="limitBar">
           <span>시간 {activeProblem.time_limit_ms / 1000}s</span>
           <span>메모리 {activeProblem.memory_limit_mb}MB</span>
-          <span>점수 {activeProblem.max_score}</span>
         </div>
         {staffSession && packageStatus && !packageStatus.ready && (
           <section className="problemHealthBanner">
@@ -3743,7 +3741,7 @@ function SubmissionsPage({
       <section className="panel">
         <div className="panel">
         <DataTable
-          columns={staffSession ? ["제출 번호", "팀", "문제", "언어", "상태", "점수", "제출 시간", "상세"] : ["제출 번호", "문제", "언어", "상태", "점수", "제출 시간", "코드 길이", "재채점"]}
+          columns={staffSession ? ["제출 번호", "팀", "문제", "언어", "상태", "제출 시간", "상세"] : ["제출 번호", "문제", "언어", "상태", "제출 시간", "코드 길이", "재채점"]}
           rows={pagedItems.map((item) => {
             const problem = problemMap.get(item.problem_id);
             const problemCell = (
@@ -3763,7 +3761,6 @@ function SubmissionsPage({
                 problemCell,
                 languageCell,
                 <SubmissionStatusBadge submission={item} compact />,
-                item.awarded_score ?? "-",
                 <time title={formatDate(item.submitted_at)}>{formatRelativeTime(item.submitted_at)}</time>,
                 <button className="textButton" onClick={() => { setSelectedSubmissionId(item.submission_id); setSubmissionModalOpen(true); }}>상세</button>
               ];
@@ -3773,7 +3770,6 @@ function SubmissionsPage({
               problemCell,
               languageCell,
               <SubmissionStatusBadge submission={item} compact />,
-              item.awarded_score ?? "-",
               <time title={formatDate(item.submitted_at)}>{formatRelativeTime(item.submitted_at)}</time>,
               item.source_code ? `${item.source_code.length} B` : "-",
               "재채점 없음"
@@ -3824,7 +3820,6 @@ function SubmissionsPage({
               <div><dt>제출자</dt><dd>{selectedSubmission.member_name ?? selectedSubmission.member_email ?? "-"}</dd></div>
               <div><dt>문제</dt><dd>{problemMap.get(selectedSubmission.problem_id)?.title ?? selectedSubmission.problem_id}</dd></div>
               <div><dt>언어</dt><dd>{selectedSubmission.language}</dd></div>
-              <div><dt>점수</dt><dd>{selectedSubmission.awarded_score ?? "-"}</dd></div>
               <div><dt>실패 케이스</dt><dd>{selectedSubmission.failed_testcase_order ? `#${selectedSubmission.failed_testcase_order}` : "-"}</dd></div>
               <div><dt>제출 시각</dt><dd>{formatDate(selectedSubmission.submitted_at)}</dd></div>
             </dl>
@@ -3987,7 +3982,7 @@ function ScoreboardPage({
               <th>순위</th>
               <th>팀명</th>
               <th>해결</th>
-              <th>점수</th>
+              <th>페널티</th>
               <th>시도</th>
               {problemCodes.map((code) => <th key={code}>{code}</th>)}
             </tr>
@@ -3998,7 +3993,7 @@ function ScoreboardPage({
                 <td>{row.rank}</td>
                 <td><strong>{row.team_name}</strong></td>
                 <td>{row.solved}</td>
-                <td>{row.score}</td>
+                <td>{row.penalty}</td>
                 <td>{row.submission_count}</td>
                 {problemCodes.map((code) => {
                   const score = row.problem_scores.find((item) => item.problem_code === code);
@@ -5742,7 +5737,6 @@ function OperatorProblemsPage({
   const [title, setTitle] = useState("");
   const [timeLimitMs, setTimeLimitMs] = useState(1000);
   const [memoryLimitMb, setMemoryLimitMb] = useState(512);
-  const [maxScore, setMaxScore] = useState(100);
   const [statement, setStatement] = useState("");
   const [inputDescription, setInputDescription] = useState("");
   const [outputDescription, setOutputDescription] = useState("");
@@ -5854,7 +5848,6 @@ function OperatorProblemsPage({
     setTitle("");
     setTimeLimitMs(1000);
     setMemoryLimitMb(512);
-    setMaxScore(100);
     setStatement("");
     setInputDescription("");
     setOutputDescription("");
@@ -5889,7 +5882,6 @@ function OperatorProblemsPage({
     setTitle(problem.title);
     setTimeLimitMs(problem.time_limit_ms);
     setMemoryLimitMb(problem.memory_limit_mb);
-    setMaxScore(problem.max_score);
     setStatement(document.statement);
     setInputDescription(document.inputDescription);
     setOutputDescription(document.outputDescription);
@@ -5937,8 +5929,7 @@ function OperatorProblemsPage({
           statement: serializeProblemDocument({ statement, inputDescription, outputDescription, note, examples }),
           time_limit_ms: timeLimitMs,
           memory_limit_mb: memoryLimitMb,
-          display_order: displayOrder,
-          max_score: maxScore
+          display_order: displayOrder
         })
       });
       setProblems((current) => sortProblems([...current, created]));
@@ -5974,8 +5965,7 @@ function OperatorProblemsPage({
           statement: serializeProblemDocument({ statement, inputDescription, outputDescription, note, examples }),
           time_limit_ms: timeLimitMs,
           memory_limit_mb: memoryLimitMb,
-          display_order: displayOrder,
-          max_score: maxScore
+          display_order: displayOrder
         })
       });
       setProblems((current) => sortProblems(current.map((problem) => (problem.problem_id === updated.problem_id ? { ...problem, ...updated } : problem))));
@@ -6850,7 +6840,7 @@ function OperatorProblemsPage({
     ["6 Script", `${scriptLines.length} tests`]
   ];
   const authoringTabs: { value: AuthoringTab; label: string; detail: string }[] = [
-    { value: "settings", label: "기본 정보", detail: "유형, 코드, 제한, 점수" },
+    { value: "settings", label: "기본 정보", detail: "유형, 코드, 제한" },
     { value: "statement", label: "문제/예제", detail: "본문, 입출력, 노트, 리소스" },
     { value: "tests", label: "테스트케이스", detail: "패키지 파일, 스크립트, 빌드" },
     { value: "judge", label: "테스트 제출", detail: "실제 채점/결과 분석" },
@@ -6908,7 +6898,7 @@ function OperatorProblemsPage({
                 <span className="problemCode">{problem.problem_code}</span>
                 <span className="authoringProblemMeta">
                   <strong>{problem.title}</strong>
-                  <small>{problem.time_limit_ms / 1000}s · {problem.memory_limit_mb}MB · {problem.max_score}점</small>
+                  <small>{problem.time_limit_ms / 1000}s · {problem.memory_limit_mb}MB</small>
                 </span>
               </button>
             ))}
@@ -6997,11 +6987,10 @@ function OperatorProblemsPage({
               </div>
             </div>
             <div className="editorSection">
-              <h3>제한과 점수</h3>
+              <h3>제한</h3>
               <div className="fieldGrid">
                 <label><span>시간 제한(ms)</span><input type="number" value={timeLimitMs} disabled={operationLocked} onChange={(event) => setTimeLimitMs(Number(event.target.value))} /></label>
                 <label><span>메모리(MB)</span><input type="number" value={memoryLimitMb} disabled={operationLocked} onChange={(event) => setMemoryLimitMb(Number(event.target.value))} /></label>
-                <label><span>최대 점수</span><input type="number" value={maxScore} disabled={operationLocked} onChange={(event) => setMaxScore(Number(event.target.value))} /></label>
               </div>
             </div>
           </section>
@@ -7327,7 +7316,6 @@ function OperatorProblemsPage({
                 <div className="previewMetaItem"><span>참가 유형</span><strong>{problemDivision.name}</strong></div>
                 <div className="previewMetaItem"><span>문제 코드</span><strong>{editorMode === "edit" ? selectedProblem?.problem_code ?? "-" : problemCode || "-"}</strong></div>
                 <div className="previewMetaItem"><span>제한</span><strong>{timeLimitMs / 1000}s / {memoryLimitMb}MB</strong></div>
-                <div className="previewMetaItem"><span>점수</span><strong>{maxScore}점</strong></div>
                 <div className="previewMetaItem"><span>예제</span><strong>{examples.length}개</strong></div>
                 <div className="previewMetaItem"><span>리소스</span><strong>{assets.length}개</strong></div>
                 <div className="previewMetaItem"><span>패키지 파일</span><strong>{packageAssets.length}개</strong></div>
@@ -8133,12 +8121,12 @@ function SettingToggle({ title, detail, checked, onToggle }: { title: string; de
 function ResultCell({
   problemScore
 }: {
-  problemScore?: { score: number; max_score: number; attempts: number; wrong_attempts: number; solved: boolean };
+  problemScore?: { attempts: number; wrong_attempts: number; solved: boolean };
 }) {
   if (!problemScore || problemScore.attempts <= 0) {
     return <span className="resultCell empty" aria-label="제출 없음" />;
   }
-  if (problemScore.solved || problemScore.score >= problemScore.max_score) {
+  if (problemScore.solved) {
     const suffix = problemScore.wrong_attempts > 0 ? `+${problemScore.wrong_attempts}` : "+";
     return <span className="resultCell solved">{suffix}</span>;
   }
