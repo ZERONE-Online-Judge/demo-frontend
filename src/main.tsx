@@ -1636,6 +1636,10 @@ function App() {
       if (divisionId !== activeGeneralParticipant.division.division_id) setDivisionId(activeGeneralParticipant.division.division_id);
       return;
     }
+    if (activeGeneralOperator && page === "scoreboard" && api.divisions.length) {
+      if (!api.divisions.some((division) => division.division_id === divisionId)) setDivisionId(api.divisions[0].division_id);
+      return;
+    }
     if (activeGeneralOperator && isContestArea) {
       return;
     }
@@ -3802,7 +3806,7 @@ function ScoreboardPage({
   const [operatorDivisions, setOperatorDivisions] = useState<Division[]>([]);
   const canSelectDivision = Boolean(staffSession) || !locked;
   const divisionOptions = api.divisions.length ? api.divisions : operatorDivisions;
-  const effectiveDivision = staffSession && !division.division_id ? division : division.division_id ? division : divisionOptions[0] ?? division;
+  const effectiveDivision = division.division_id ? division : divisionOptions[0] ?? division;
   const fallbackRowsForDivision = api.scoreboard.filter((row) => !row.division || row.division === effectiveDivision.name);
   const rows = liveRows.length ? liveRows : fallbackRowsForDivision;
   const problemCodes = Array.from(new Set(rows.flatMap((row) => row.problem_scores.map((score) => score.problem_code)))).sort();
@@ -3810,8 +3814,6 @@ function ScoreboardPage({
   const endWarning = contestEndAnnouncement(contest);
   const scoreboardDescription = !canSelectDivision
     ? `로그인한 팀의 ${effectiveDivision.name} 참가 유형 순위만 표시합니다.`
-    : staffSession && !effectiveDivision.division_id
-    ? "전체 참가 유형 기준 순위입니다."
     : effectiveDivision.division_id
     ? `${effectiveDivision.name} 유형 기준 순위입니다.`
     : "등록된 참가 유형이 없어 전체 스코어보드를 표시합니다.";
@@ -3826,6 +3828,7 @@ function ScoreboardPage({
         if (cancelled) return;
         const sorted = [...data.divisions].sort((a, b) => a.name.localeCompare(b.name));
         setOperatorDivisions(sorted);
+        if (!division.division_id && sorted[0]) setDivisionId(sorted[0].division_id);
       } catch {
         // Keep the scoreboard usable via the contest-level operator endpoint.
       }
@@ -3879,7 +3882,7 @@ function ScoreboardPage({
     <section className="pageGrid">
       <PageHeader badge="scoreboard" title="스코어보드" description={scoreboardDescription} />
       {canSelectDivision ? (
-        <Segmented options={divisionOptions} value={effectiveDivision.division_id} onChange={setDivisionId} allLabel={staffSession ? "전체" : undefined} />
+        <Segmented options={divisionOptions} value={effectiveDivision.division_id} onChange={setDivisionId} />
       ) : (
         <DivisionLock division={effectiveDivision} />
       )}
