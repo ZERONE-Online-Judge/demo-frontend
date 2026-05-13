@@ -3869,7 +3869,7 @@ function ScoreboardPage({
         <InfoCard icon={<Activity />} title="큐" value={String(api.judgeStatus?.total_queue_depth ?? 0)} detail="pending jobs" />
       </section>
       {message && <p className={`submitMessage ${message.includes("실패") ? "error" : "done"}`}>{message}</p>}
-      <p className="panelNote">문제 칸 표기: 제출 없음은 빈칸, 오답은 -n, 정답은 + 또는 +n입니다.</p>
+      <p className="panelNote">문제 칸 표기: 제출 없음은 빈칸, 오답은 -n, 한 번에 정답은 체크, 오답 후 정답은 +n입니다.</p>
       <section className="panel">
         <table className="scoreboardTable">
           <thead>
@@ -8022,7 +8022,7 @@ function ResultCell({
     return <span className="resultCell empty" aria-label="제출 없음" />;
   }
   if (problemScore.solved) {
-    const suffix = problemScore.wrong_attempts > 0 ? `+${problemScore.wrong_attempts}` : "+";
+    const suffix = problemScore.wrong_attempts > 0 ? `+${problemScore.wrong_attempts}` : "✓";
     return <span className="resultCell solved">{suffix}</span>;
   }
   if (problemScore.attempts <= 0) {
