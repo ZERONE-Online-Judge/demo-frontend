@@ -434,6 +434,18 @@ gen_reverse 100000
 gen_sorted 100000
 `;
 
+function sortProblemsByDisplayOrder(items: Problem[]) {
+  return [...items].sort((a, b) => {
+    const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
+    if (orderDiff) return orderDiff;
+    const codeDiff = a.problem_code.localeCompare(b.problem_code);
+    if (codeDiff) return codeDiff;
+    const titleDiff = a.title.localeCompare(b.title);
+    if (titleDiff) return titleDiff;
+    return a.problem_id.localeCompare(b.problem_id);
+  });
+}
+
 class ApiClientError extends Error {
   status: number;
   code: string;
@@ -1506,7 +1518,7 @@ function App() {
     () => api.divisions.find((division) => division.division_id === activeDivisionId) ?? activeParticipant?.division ?? activeGeneralParticipant?.division ?? api.divisions[0] ?? emptyDivision(),
     [api.divisions, activeDivisionId, activeParticipant, activeGeneralParticipant]
   );
-  const currentProblems = participantProblems[currentDivision.division_id] ?? api.problems[currentDivision.division_id] ?? api.problems[currentDivision.code] ?? [];
+  const currentProblems = sortProblemsByDisplayOrder(participantProblems[currentDivision.division_id] ?? api.problems[currentDivision.division_id] ?? api.problems[currentDivision.code] ?? []);
   const currentProblem = currentProblems.find((item) => item.problem_id === problemId) ?? currentProblems[0];
   const contestScopedPages: Page[] = ["participant-login", "contest", "problemset", "problem", "submissions", "scoreboard", "board"];
   const isContestArea = contestScopedPages.includes(page) && Boolean(route.contestId);
@@ -1617,7 +1629,7 @@ function App() {
     async function loadContestProblems() {
       try {
         if (activeGeneralOperator && operatorStaffSession) {
-          const data = await apiRequest<Problem[]>(`/operator/contests/${selectedContest.contest_id}/problems`, operatorStaffSession.accessToken);
+          const data = sortProblemsByDisplayOrder(await apiRequest<Problem[]>(`/operator/contests/${selectedContest.contest_id}/problems`, operatorStaffSession.accessToken));
           if (!cancelled) {
             const grouped = data.reduce<Record<string, Problem[]>>((groups, item) => {
               const key = item.division_id ?? "";
@@ -1635,7 +1647,7 @@ function App() {
         const path = token
           ? `/contests/${selectedContest.contest_id}/problems`
           : `/contests/${selectedContest.contest_id}/divisions/${currentDivision.division_id}/problems`;
-        const data = await apiRequest<Problem[]>(path, token);
+        const data = sortProblemsByDisplayOrder(await apiRequest<Problem[]>(path, token));
         if (!cancelled) {
           setParticipantProblems((current) => ({ ...current, [currentDivision.division_id]: data }));
           if (!problemId && data[0]) setProblemId(data[0].problem_id);
@@ -3065,7 +3077,8 @@ function ProblemSetPage({
   }, [division.division_id, problems.length]);
   const totalPages = Math.max(1, Math.ceil(problems.length / pageSize));
   const safePage = Math.min(pageIndex, totalPages);
-  const pageItems = problems.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const orderedProblems = sortProblemsByDisplayOrder(problems);
+  const pageItems = orderedProblems.slice((safePage - 1) * pageSize, safePage * pageSize);
   return (
     <section className="pageGrid">
       <PageHeader badge={division.name} title="문제집" description="본인 참가 유형 문제만 표시됩니다." />
@@ -5662,14 +5675,7 @@ function OperatorProblemsPage({
   });
   const [packageStatus, setPackageStatus] = useState<ProblemPackageStatus | null>(null);
   const statementRef = useRef<HTMLTextAreaElement | null>(null);
-  const sortProblems = (items: Problem[]) =>
-    [...items].sort((a, b) => {
-      const orderDiff = (a.display_order ?? 0) - (b.display_order ?? 0);
-      if (orderDiff) return orderDiff;
-      const codeDiff = a.problem_code.localeCompare(b.problem_code);
-      if (codeDiff) return codeDiff;
-      return a.title.localeCompare(b.title);
-    });
+  const sortProblems = sortProblemsByDisplayOrder;
 
   async function loadProblems() {
     if (!contestId) return;
