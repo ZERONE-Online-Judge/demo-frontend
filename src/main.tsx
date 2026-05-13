@@ -460,10 +460,25 @@ function emitSessionSync() {
   window.dispatchEvent(new Event(SESSION_SYNC_EVENT));
 }
 
-function clearStoredSessions() {
-  window.localStorage.removeItem(GENERAL_SESSION_KEY);
-  window.localStorage.removeItem(PARTICIPANT_SESSION_KEY);
-  emitSessionSync();
+function clearStoredSessionForFailedToken(token: string, path: string) {
+  const general = loadStoredGeneralSession();
+  let changed = false;
+  if (general?.accessToken === token) {
+    saveGeneralSession(null);
+    changed = true;
+  } else if (general?.operatorSession?.accessToken === token) {
+    saveGeneralSession({ ...general, operatorSession: null });
+    changed = true;
+  }
+
+  const participant = loadStoredParticipantSession();
+  const contestId = parseContestId(path);
+  if (participant?.accessToken === token && (!contestId || !participant.contestId || participant.contestId === contestId)) {
+    saveParticipantSession(null);
+    changed = true;
+  }
+
+  if (changed) emitSessionSync();
 }
 
 function toApiError(response: Response, payload: any) {
@@ -503,6 +518,25 @@ function canAttemptAutoRefresh(path: string) {
 function parseContestId(path: string) {
   const match = path.match(/\/contests\/([^/]+)/);
   return match?.[1] ?? null;
+}
+
+function storedReplacementTokenForRequest(token: string, path: string): string | null {
+  const general = loadStoredGeneralSession();
+  if ((path.startsWith("/operator/") || path.startsWith("/admin/")) && general?.operatorSession?.accessToken && general.operatorSession.accessToken !== token) {
+    return general.operatorSession.accessToken;
+  }
+  if ((path === "/auth/general/me" || path.startsWith("/auth/general/")) && general?.accessToken && general.accessToken !== token) {
+    return general.accessToken;
+  }
+  const contestId = parseContestId(path);
+  const participant = loadStoredParticipantSession();
+  if (contestId && participant?.accessToken && participant.accessToken !== token && (!participant.contestId || participant.contestId === contestId)) {
+    return participant.accessToken;
+  }
+  if (general?.accessToken && general.accessToken !== token) {
+    return general.accessToken;
+  }
+  return null;
 }
 
 async function refreshStaffAccessToken(token: string): Promise<string | null> {
@@ -589,6 +623,8 @@ async function refreshParticipantAccessToken(token: string, path: string): Promi
 }
 
 async function tryRefreshTokenForRequest(token: string, path: string): Promise<string | null> {
+  const replacement = storedReplacementTokenForRequest(token, path);
+  if (replacement) return replacement;
   const refreshedStaff = await refreshStaffAccessToken(token);
   if (refreshedStaff) return refreshedStaff;
   const refreshedGeneral = await refreshGeneralAccessToken(token);
@@ -725,7 +761,7 @@ async function apiRequest<T>(path: string, token?: string, init?: RequestInit): 
   }
   if (!result.response.ok) {
     if (result.response.status === 401 && currentToken && canAttemptAutoRefresh(path)) {
-      clearStoredSessions();
+      clearStoredSessionForFailedToken(currentToken, path);
     }
     throw toApiError(result.response, result.payload);
   }
@@ -744,7 +780,7 @@ async function apiPageRequest<T>(path: string, token?: string, init?: RequestIni
   }
   if (!result.response.ok) {
     if (result.response.status === 401 && currentToken && canAttemptAutoRefresh(path)) {
-      clearStoredSessions();
+      clearStoredSessionForFailedToken(currentToken, path);
     }
     throw toApiError(result.response, result.payload);
   }
