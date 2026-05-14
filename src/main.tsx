@@ -3968,7 +3968,7 @@ function ScoreboardPage({
               <th>순위</th>
               <th>팀명</th>
               <th>해결</th>
-              {staffSession && <th>총시간</th>}
+              <th>총시간(min)</th>
               <th>시도</th>
               {problemCodes.map((code) => <th key={code}>{code}</th>)}
             </tr>
@@ -3979,13 +3979,15 @@ function ScoreboardPage({
                 <td>{row.rank}</td>
                 <td><strong>{row.team_name}</strong></td>
                 <td>{row.solved}</td>
-                {staffSession && (
-                  <td>
+                <td>
+                  {staffSession ? (
                     <button className="textButton tableLink" onClick={() => setPenaltyRow(row)}>
                       {row.penalty ?? 0}
                     </button>
-                  </td>
-                )}
+                  ) : (
+                    row.penalty ?? 0
+                  )}
+                </td>
                 <td>{row.submission_count}</td>
                 {problemCodes.map((code) => {
                   const score = row.problem_scores.find((item) => item.problem_code === code);
