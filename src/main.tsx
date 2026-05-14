@@ -180,7 +180,7 @@ type ScoreboardRow = {
   team_name: string;
   division: string | null;
   solved: number;
-  penalty: number;
+  penalty?: number | null;
   submission_count: number;
   last_solved_at?: string | null;
   problem_scores: {
@@ -190,6 +190,9 @@ type ScoreboardRow = {
     wrong_attempts: number;
     solved: boolean;
     penalty?: number | null;
+    solved_at?: string | null;
+    best_submission_id?: string | null;
+    best_submitted_at?: string | null;
     best_status: string | null;
   }[];
 };
@@ -210,6 +213,7 @@ type Submission = {
   failed_testcase_order?: number | null;
   progress_current?: number | null;
   progress_total?: number | null;
+  progress_percent?: number | null;
   participant_team_id?: string;
   team_member_id?: string;
   team_name?: string | null;
@@ -1329,7 +1333,7 @@ function useApiData(selectedContestId?: string): ApiState {
           apiRequest<Notice[]>("/public/service-notices"),
           apiRequest<JudgeStatus>("/public/judge-status")
         ]);
-        const sortedContests = [...contests].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
+        let sortedContests = [...contests].sort((a, b) => new Date(a.start_at).getTime() - new Date(b.start_at).getTime());
         const detailContestId = selectedContestId ?? sortedContests[0]?.contest_id;
         let detail: { contest: Contest; divisions: Division[] } | null = null;
         if (detailContestId) {
@@ -1338,6 +1342,9 @@ function useApiData(selectedContestId?: string): ApiState {
           } catch (error) {
             if (!(error instanceof ApiClientError && error.status === 404)) throw error;
           }
+        }
+        if (detail?.contest) {
+          sortedContests = sortedContests.map((contest) => contest.contest_id === detail?.contest.contest_id ? detail.contest : contest);
         }
         if (!cancelled) {
           setState({
@@ -1379,9 +1386,27 @@ function useApiData(selectedContestId?: string): ApiState {
         // Keep the last visible judge status if a realtime refresh fails.
       }
     }, 1500);
+    const contestDetailTimer = window.setInterval(async () => {
+      const contestId = selectedContestId;
+      if (!contestId) return;
+      try {
+        const detail = await apiRequest<{ contest: Contest; divisions: Division[] }>(`/public/contests/${contestId}`);
+        if (!cancelled) {
+          setState((current) => ({
+            ...current,
+            contest: detail.contest,
+            divisions: detail.divisions,
+            contests: current.contests.map((contest) => contest.contest_id === detail.contest.contest_id ? detail.contest : contest)
+          }));
+        }
+      } catch {
+        // Keep the last visible contest metadata if a refresh fails.
+      }
+    }, 5000);
     return () => {
       cancelled = true;
       window.clearInterval(judgeStatusTimer);
+      window.clearInterval(contestDetailTimer);
     };
   }, [selectedContestId]);
 
@@ -1437,10 +1462,11 @@ function AppShell({
     contest ? freezeAnnouncement(contest) : "",
     contest ? contestEndAnnouncement(contest) : ""
   ].filter((text) => text.length > 0);
+  const emergencyKey = `${contest?.contest_id ?? ""}:${emergencyTexts.join("|")}`;
 
   useEffect(() => {
     setNoticeClosed(false);
-  }, [contest?.contest_id]);
+  }, [emergencyKey]);
 
   void shellFacts;
   void shellActions;
@@ -3524,7 +3550,7 @@ function SubmissionsPage({
     loadSubmissions(pageIndex);
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") loadSubmissions(pageIndex);
-    }, 5000);
+    }, participant ? 2000 : 5000);
     const onFocus = () => loadSubmissions(pageIndex);
     window.addEventListener("focus", onFocus);
     return () => {
@@ -3535,16 +3561,19 @@ function SubmissionsPage({
   }, [api.submissions, contest.contest_id, participant, staffSession?.accessToken, pageIndex]);
 
   useEffect(() => {
-    if (!staffSession) return;
-    const staffToken = staffSession.accessToken;
+    const token = staffSession?.accessToken ?? participant?.accessToken;
+    if (!token) return;
     const pendingIds = pendingSubmissionIds;
     if (!pendingIds.length) return;
     let cancelled = false;
     async function waitPending(submissionId: string) {
       try {
+        const path = staffSession
+          ? `/operator/contests/${contest.contest_id}/submissions/${submissionId}/status:wait?wait_seconds=2&poll_interval_seconds=0.1`
+          : `/contests/${contest.contest_id}/submissions/${submissionId}/status:wait?wait_seconds=2&poll_interval_seconds=0.1`;
         const updated = await apiRequest<Submission>(
-          `/operator/contests/${contest.contest_id}/submissions/${submissionId}/status:wait?wait_seconds=4&poll_interval_seconds=0.5`,
-          staffToken
+          path,
+          token
         );
         if (cancelled) return;
         setItems((current) => current.map((item) => (item.submission_id === updated.submission_id ? { ...item, ...updated, source_code: item.source_code } : item)));
@@ -3559,7 +3588,7 @@ function SubmissionsPage({
     return () => {
       cancelled = true;
     };
-  }, [contest.contest_id, pendingSubmissionKey, selectedSubmissionDetail?.submission_id, staffSession?.accessToken]);
+  }, [contest.contest_id, participant?.accessToken, pendingSubmissionKey, selectedSubmissionDetail?.submission_id, staffSession?.accessToken]);
 
   useEffect(() => {
     if (!filteredItems.length) {
@@ -3809,6 +3838,7 @@ function ScoreboardPage({
   const [frozen, setFrozen] = useState(false);
   const [message, setMessage] = useState("");
   const [operatorDivisions, setOperatorDivisions] = useState<Division[]>([]);
+  const [penaltyRow, setPenaltyRow] = useState<ScoreboardRow | null>(null);
   const canSelectDivision = Boolean(staffSession) || !locked;
   const divisionOptions = api.divisions.length ? api.divisions : operatorDivisions;
   const effectiveDivision = division.division_id ? division : divisionOptions[0] ?? division;
@@ -3823,6 +3853,16 @@ function ScoreboardPage({
     ? `${effectiveDivision.name} 유형 기준 순위입니다.`
     : "등록된 참가 유형이 없어 전체 스코어보드를 표시합니다.";
   const remaining = contestRemainingLabel(contest);
+  const penaltyBreakdown = penaltyRow?.problem_scores
+    .filter((score) => score.solved && typeof score.penalty === "number")
+    .map((score) => {
+      const wrongPenalty = score.wrong_attempts * 20;
+      return {
+        ...score,
+        wrongPenalty,
+        solvedMinute: Math.max(0, Number(score.penalty) - wrongPenalty)
+      };
+    }) ?? [];
 
   useEffect(() => {
     let cancelled = false;
@@ -3918,7 +3958,7 @@ function ScoreboardPage({
               <th>순위</th>
               <th>팀명</th>
               <th>해결</th>
-              <th>페널티</th>
+              {staffSession && <th>페널티</th>}
               <th>시도</th>
               {problemCodes.map((code) => <th key={code}>{code}</th>)}
             </tr>
@@ -3929,7 +3969,13 @@ function ScoreboardPage({
                 <td>{row.rank}</td>
                 <td><strong>{row.team_name}</strong></td>
                 <td>{row.solved}</td>
-                <td>{row.penalty}</td>
+                {staffSession && (
+                  <td>
+                    <button className="textButton tableLink" onClick={() => setPenaltyRow(row)}>
+                      {row.penalty ?? 0}
+                    </button>
+                  </td>
+                )}
                 <td>{row.submission_count}</td>
                 {problemCodes.map((code) => {
                   const score = row.problem_scores.find((item) => item.problem_code === code);
@@ -3939,6 +3985,33 @@ function ScoreboardPage({
             ))}
           </tbody>
         </table>
+        {staffSession && penaltyRow && (
+          <div className="modalOverlay" onClick={() => setPenaltyRow(null)}>
+            <aside className="panel submissionInspector modalPanel" onClick={(event) => event.stopPropagation()}>
+              <div className="panelTitleRow">
+                <PanelTitle icon={<Timer />} title="패널티 상세" />
+                <button className="secondary" onClick={() => setPenaltyRow(null)}>닫기</button>
+              </div>
+              <section className="previewMetaGrid">
+                <div className="previewMetaItem"><span>팀</span><strong>{penaltyRow.team_name}</strong></div>
+                <div className="previewMetaItem"><span>해결</span><strong>{penaltyRow.solved}</strong></div>
+                <div className="previewMetaItem"><span>총 패널티</span><strong>{penaltyRow.penalty ?? 0}</strong></div>
+                <div className="previewMetaItem"><span>참가 유형</span><strong>{penaltyRow.division ?? effectiveDivision.name}</strong></div>
+              </section>
+              <DataTable
+                columns={["문제", "맞힌 시간", "오답", "계산", "패널티"]}
+                rows={penaltyBreakdown.map((score) => [
+                  score.problem_code,
+                  score.solved_at ? formatDate(score.solved_at) : `${score.solvedMinute}분`,
+                  `${score.wrong_attempts}회`,
+                  `${score.solvedMinute} + ${score.wrong_attempts} × 20`,
+                  score.penalty ?? 0
+                ])}
+              />
+              {!penaltyBreakdown.length && <p className="panelNote">해결한 문제가 없어 패널티 내역이 없습니다.</p>}
+            </aside>
+          </div>
+        )}
       </section>
     </section>
   );
@@ -8158,10 +8231,15 @@ type SubmissionProgressState = {
   status?: string | null;
   progress_current?: number | null;
   progress_total?: number | null;
+  progress_percent?: number | null;
 };
 
 function submissionProgressPercent(submission?: SubmissionProgressState | null) {
   const status = submission?.status;
+  const explicitPercent = submission?.progress_percent;
+  if (isSubmissionPending(status) && typeof explicitPercent === "number") {
+    return Math.max(0, Math.min(100, Math.round(explicitPercent)));
+  }
   const current = submission?.progress_current;
   const total = submission?.progress_total;
   if (isSubmissionPending(status) && total && total > 0) {
@@ -8363,16 +8441,28 @@ function isFrozen(contest: Contest) {
 }
 
 function freezeAnnouncement(contest: Contest) {
-  const diffMinutes = Math.ceil((new Date(contest.freeze_at).getTime() - Date.now()) / 60000);
+  if (isScheduleTbd(contest)) return "";
+  const now = Date.now();
+  const freezeAt = new Date(contest.freeze_at).getTime();
+  const endAt = new Date(contest.end_at).getTime();
+  if (now >= freezeAt && now < endAt) {
+    return "스코어보드 프리즈가 시작되었습니다. 공개 스코어보드는 프리즈 시점 순위만 표시됩니다.";
+  }
+  const diffMinutes = Math.ceil((freezeAt - now) / 60000);
   if (diffMinutes <= 0 || diffMinutes > 30) return "";
-  const threshold = diffMinutes <= 5 ? 5 : diffMinutes <= 10 ? 10 : diffMinutes <= 20 ? 20 : 30;
+  const threshold = diffMinutes <= 1 ? 1 : diffMinutes <= 5 ? 5 : diffMinutes <= 10 ? 10 : 30;
   return `스코어보드 프리즈 ${threshold}분 전입니다. 프리즈 이후 공개 스코어보드는 프리즈 시점 순위만 표시됩니다.`;
 }
 
 function contestEndAnnouncement(contest: Contest) {
-  const diffMinutes = Math.ceil((new Date(contest.end_at).getTime() - Date.now()) / 60000);
+  if (isScheduleTbd(contest)) return "";
+  const endAt = new Date(contest.end_at).getTime();
+  if (Date.now() >= endAt || ["ended", "finalized", "archived"].includes(contest.status)) {
+    return "대회가 종료되었습니다. 더 이상 제출할 수 없습니다.";
+  }
+  const diffMinutes = Math.ceil((endAt - Date.now()) / 60000);
   if (diffMinutes <= 0 || diffMinutes > 30) return "";
-  const threshold = diffMinutes <= 1 ? 1 : diffMinutes <= 5 ? 5 : diffMinutes <= 10 ? 10 : diffMinutes <= 20 ? 20 : 30;
+  const threshold = diffMinutes <= 1 ? 1 : diffMinutes <= 5 ? 5 : diffMinutes <= 10 ? 10 : 30;
   return `대회 종료 ${threshold}분 전입니다. 종료 후에는 제출할 수 없습니다.`;
 }
 
