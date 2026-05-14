@@ -214,6 +214,8 @@ type Submission = {
   progress_current?: number | null;
   progress_total?: number | null;
   progress_percent?: number | null;
+  runtime_ms?: number | null;
+  memory_kb?: number | null;
   participant_team_id?: string;
   team_member_id?: string;
   team_name?: string | null;
@@ -3682,6 +3684,8 @@ function SubmissionsPage({
     const length = item.source_code_length ?? (item.source_code ? new Blob([item.source_code]).size : null);
     return typeof length === "number" ? `${length.toLocaleString()} B` : "-";
   };
+  const runtimeLabel = (item: Submission) => typeof item.runtime_ms === "number" ? `${item.runtime_ms} ms` : "-";
+  const memoryLabel = (item: Submission) => typeof item.memory_kb === "number" ? `${item.memory_kb.toLocaleString()} KB` : "-";
   const openSubmissionSource = (submissionId: string) => {
     setSourceSubmissionId(submissionId);
     setSourceSubmissionDetail(null);
@@ -3707,7 +3711,7 @@ function SubmissionsPage({
       <section className="panel">
         <div className="panel">
         <DataTable
-          columns={staffSession ? ["제출 번호", "팀", "문제", "언어", "상태", "제출 시간", "상세"] : ["제출 번호", "문제", "언어", "상태", "제출 시간", "코드 길이"]}
+          columns={staffSession ? ["제출 번호", "팀", "문제", "언어", "상태", "시간", "메모리", "제출 시간", "상세"] : ["제출 번호", "문제", "언어", "상태", "시간", "메모리", "제출 시간", "코드 길이"]}
           rows={pagedItems.map((item) => {
             const problem = problemMap.get(item.problem_id);
             const problemCell = (
@@ -3727,6 +3731,8 @@ function SubmissionsPage({
                 problemCell,
                 languageCell,
                 <SubmissionStatusBadge submission={item} compact />,
+                runtimeLabel(item),
+                memoryLabel(item),
                 <time title={formatDate(item.submitted_at)}>{formatRelativeTime(item.submitted_at)}</time>,
                 <button className="textButton" onClick={() => { setSelectedSubmissionId(item.submission_id); setSubmissionModalOpen(true); }}>상세</button>
               ];
@@ -3736,6 +3742,8 @@ function SubmissionsPage({
               problemCell,
               languageCell,
               <SubmissionStatusBadge submission={item} compact />,
+              runtimeLabel(item),
+              memoryLabel(item),
               <time title={formatDate(item.submitted_at)}>{formatRelativeTime(item.submitted_at)}</time>,
               sourceLengthLabel(item)
             ];
@@ -3785,6 +3793,8 @@ function SubmissionsPage({
               <div><dt>제출자</dt><dd>{selectedSubmission.member_name ?? selectedSubmission.member_email ?? "-"}</dd></div>
               <div><dt>문제</dt><dd>{problemMap.get(selectedSubmission.problem_id)?.title ?? selectedSubmission.problem_id}</dd></div>
               <div><dt>언어</dt><dd>{selectedSubmission.language}</dd></div>
+              <div><dt>시간</dt><dd>{runtimeLabel(selectedSubmission)}</dd></div>
+              <div><dt>메모리</dt><dd>{memoryLabel(selectedSubmission)}</dd></div>
               <div><dt>실패 케이스</dt><dd>{selectedSubmission.failed_testcase_order ? `#${selectedSubmission.failed_testcase_order}` : "-"}</dd></div>
               <div><dt>제출 시각</dt><dd>{formatDate(selectedSubmission.submitted_at)}</dd></div>
             </dl>
@@ -3958,7 +3968,7 @@ function ScoreboardPage({
               <th>순위</th>
               <th>팀명</th>
               <th>해결</th>
-              {staffSession && <th>페널티</th>}
+              {staffSession && <th>총시간</th>}
               <th>시도</th>
               {problemCodes.map((code) => <th key={code}>{code}</th>)}
             </tr>
@@ -3989,17 +3999,17 @@ function ScoreboardPage({
           <div className="modalOverlay" onClick={() => setPenaltyRow(null)}>
             <aside className="panel submissionInspector modalPanel" onClick={(event) => event.stopPropagation()}>
               <div className="panelTitleRow">
-                <PanelTitle icon={<Timer />} title="패널티 상세" />
+                <PanelTitle icon={<Timer />} title="총시간 상세" />
                 <button className="secondary" onClick={() => setPenaltyRow(null)}>닫기</button>
               </div>
               <section className="previewMetaGrid">
                 <div className="previewMetaItem"><span>팀</span><strong>{penaltyRow.team_name}</strong></div>
                 <div className="previewMetaItem"><span>해결</span><strong>{penaltyRow.solved}</strong></div>
-                <div className="previewMetaItem"><span>총 패널티</span><strong>{penaltyRow.penalty ?? 0}</strong></div>
+                <div className="previewMetaItem"><span>총시간</span><strong>{penaltyRow.penalty ?? 0}</strong></div>
                 <div className="previewMetaItem"><span>참가 유형</span><strong>{penaltyRow.division ?? effectiveDivision.name}</strong></div>
               </section>
               <DataTable
-                columns={["문제", "맞힌 시간", "오답", "계산", "패널티"]}
+                columns={["문제", "맞힌 시간", "오답", "계산", "총시간"]}
                 rows={penaltyBreakdown.map((score) => [
                   score.problem_code,
                   score.solved_at ? formatDate(score.solved_at) : `${score.solvedMinute}분`,
@@ -4008,7 +4018,7 @@ function ScoreboardPage({
                   score.penalty ?? 0
                 ])}
               />
-              {!penaltyBreakdown.length && <p className="panelNote">해결한 문제가 없어 패널티 내역이 없습니다.</p>}
+              {!penaltyBreakdown.length && <p className="panelNote">해결한 문제가 없어 총시간 내역이 없습니다.</p>}
             </aside>
           </div>
         )}
