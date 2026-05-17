@@ -102,7 +102,7 @@ textarea {
   gap: 12px;
 }
 
-.brandButton span:last-child {
+.brandButton > span:last-child {
   display: grid;
   gap: 2px;
   text-align: left;
@@ -181,7 +181,7 @@ nav button.active {
   min-width: 220px;
 }
 
-.compactBrand span:last-child {
+.compactBrand > span:last-child {
   max-width: 280px;
 }
 
@@ -2940,6 +2940,51 @@ body {
   min-height: 100vh;
 }
 
+.fatalErrorPage {
+  min-height: 100vh;
+  width: 100%;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #fff;
+}
+
+.fatalErrorCard {
+  width: min(720px, 100%);
+  border: 1px solid #e4e4e5;
+  border-radius: 12px;
+  background: #fff;
+  padding: 28px;
+  color: #1b1920;
+  display: grid;
+  gap: 12px;
+}
+
+.fatalErrorCard span {
+  width: fit-content;
+  border-radius: 999px;
+  background: #ffeaea;
+  color: #d9485f;
+  padding: 5px 10px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.fatalErrorCard h1 {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.35;
+}
+
+.fatalErrorCard pre {
+  border: 1px solid #e4e4e5;
+  border-radius: 8px;
+  background: #f9f9f9;
+  padding: 14px;
+  white-space: pre-wrap;
+}
+
 main {
   width: min(1360px, calc(100vw - 32px));
   margin: 16px auto 28px;
@@ -4779,6 +4824,597 @@ body {
   }
 }
 
+/* Figma contest redesign */
+:root {
+  --figma-black: #1b1920;
+  --figma-purple: #7b61ff;
+  --figma-purple-dark: #5c49bf;
+  --figma-muted: #908e96;
+  --figma-stroke: #e4e4e5;
+  --figma-row: #f9f9f9;
+}
+
+.unifiedShell.mode-participant {
+  background: #fff;
+  color: var(--figma-black);
+  font-family: Pretendard, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.unifiedShell.mode-participant .unifiedContent {
+  max-width: none;
+}
+
+.unifiedShell.mode-participant .topbar.contestTopbar {
+  min-height: 80px;
+  border-bottom: 0;
+  background: #fff;
+  padding: 0 32px;
+}
+
+.contestTopbar .contestNav {
+  display: none;
+}
+
+.contestTopbar .contestBrandGroup {
+  flex: 1 1 auto;
+}
+
+.contestTopbar .brandButton {
+  gap: 10px;
+}
+
+.contestTopbar .brandMark {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background: var(--figma-purple);
+  color: transparent;
+}
+
+.contestTopbar .compactBrand small {
+  display: none;
+}
+
+.zojWordmark {
+  color: var(--figma-black);
+  font-size: 24px;
+  line-height: 1.4;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.contestTopbar .profileChip {
+  flex: 0 0 auto;
+}
+
+.contestTopbar .profileChip > span:not(.profileAvatar) {
+  display: none;
+}
+
+.contestTopbar .profileAvatar {
+  display: none;
+}
+
+.contestTopbar .textButton {
+  min-height: 42px;
+  border: 1px solid var(--figma-stroke);
+  border-radius: 4px;
+  padding: 0 14px;
+  color: var(--figma-purple-dark);
+  font-weight: 700;
+  justify-content: center;
+}
+
+.figmaContestPage {
+  width: min(1400px, calc(100vw - 48px));
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 105px 0 80px;
+  gap: 24px;
+}
+
+.figmaOverviewPage {
+  gap: 28px;
+}
+
+.figmaPageHeader {
+  display: grid;
+  gap: 5px;
+}
+
+.figmaPageHeader h1 {
+  margin: 0;
+  color: var(--figma-black);
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.figmaPageHeader p {
+  margin: 0;
+  color: var(--figma-muted);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.figmaContestTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.figmaContestTabs button,
+.figmaContestPage .segmented button,
+.problemWorkspaceBar .viewSwitch button {
+  min-height: 32px;
+  border: 1px solid var(--figma-stroke);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--figma-black);
+  padding: 5px 17px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.figmaContestTabs button.active,
+.figmaContestPage .segmented button.active,
+.problemWorkspaceBar .viewSwitch button.active {
+  border-color: var(--figma-black);
+  background: var(--figma-black);
+  color: #fff;
+}
+
+.figmaOverviewCards {
+  display: grid;
+  grid-template-columns: repeat(3, 320px);
+  gap: 40px;
+}
+
+.figmaOverviewCard {
+  height: 333px;
+  border: 1px solid var(--figma-stroke);
+  border-radius: 12px;
+  background: #fff;
+  padding: 30px 34px;
+  display: grid;
+  align-content: space-between;
+}
+
+.figmaOverviewIcon {
+  width: 60px;
+  height: 60px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #eeeaff;
+  color: var(--figma-purple);
+}
+
+.figmaOverviewCard strong {
+  color: var(--figma-black);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.figmaOverviewCard p {
+  margin: -54px 0 0;
+  color: var(--figma-muted);
+  font-size: 24px;
+  line-height: 1.4;
+}
+
+.figmaTablePanel {
+  overflow-x: auto;
+  background: #fff;
+}
+
+.figmaTablePanel table {
+  min-width: 100%;
+  border-collapse: collapse;
+  color: var(--figma-black);
+  font-size: 14px;
+}
+
+.figmaTablePanel th,
+.figmaTablePanel td,
+.figmaScoreboardPanel .scoreboardTable th,
+.figmaScoreboardPanel .scoreboardTable td {
+  height: 48px;
+  border: 1px solid var(--figma-stroke);
+  padding: 0 24px;
+  text-align: left;
+  white-space: nowrap;
+  text-transform: none;
+}
+
+.figmaTablePanel th,
+.figmaScoreboardPanel .scoreboardTable th {
+  background: #fff;
+  color: var(--figma-black);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.figmaTablePanel tbody tr:nth-child(odd) td,
+.figmaScoreboardPanel .scoreboardTable tbody tr:nth-child(odd) td {
+  background: var(--figma-row);
+}
+
+.figmaTablePanel .tableLink {
+  color: var(--figma-black);
+  text-decoration: none;
+}
+
+.figmaResultPill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  color: var(--figma-black);
+  font-weight: 500;
+}
+
+.figmaResultPill.success,
+.figmaJudgeResult.success {
+  color: #0f9f6e;
+}
+
+.figmaResultPill.success {
+  background: #ddfbe8;
+}
+
+.figmaResultPill.danger,
+.figmaJudgeResult.danger {
+  color: #d9485f;
+}
+
+.figmaResultPill.danger {
+  background: #ffeaea;
+}
+
+.figmaResultPill.neutral {
+  background: #efefef;
+  color: var(--figma-black);
+}
+
+.figmaJudgeResult.pending,
+.figmaJudgeResult.running,
+.figmaJudgeResult.runtime,
+.figmaJudgeResult.neutral {
+  color: var(--figma-black);
+  text-decoration: underline;
+  text-underline-position: from-font;
+}
+
+.simplePagination {
+  justify-content: center;
+  gap: 25px;
+  margin: 96px 0 0;
+}
+
+.simplePagination button {
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #000;
+  font-size: 14px;
+}
+
+.simplePagination button:first-child,
+.simplePagination button:last-child {
+  display: none;
+}
+
+.simplePagination button.active {
+  background: transparent;
+  color: #000;
+  text-decoration: underline;
+}
+
+.figmaScoreboardPanel .scoreboardTable {
+  min-width: 1400px;
+}
+
+.figmaScoreboardPanel .scoreboardTable th:nth-child(n + 4):not(:last-child),
+.figmaScoreboardPanel .scoreboardTable td:nth-child(n + 4):not(:last-child) {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+  text-align: center;
+}
+
+.figmaScoreboardPanel .scoreboardTable td:nth-child(1),
+.figmaScoreboardPanel .scoreboardTable th:nth-child(1) {
+  width: 120px;
+}
+
+.figmaScoreboardPanel .scoreboardTable td:nth-child(2),
+.figmaScoreboardPanel .scoreboardTable th:nth-child(2) {
+  width: 420px;
+}
+
+.figmaScoreboardPanel .scoreboardTable td:nth-child(3),
+.figmaScoreboardPanel .scoreboardTable th:nth-child(3) {
+  width: 120px;
+}
+
+.figmaScoreboardPanel .scoreboardTable td:last-child,
+.figmaScoreboardPanel .scoreboardTable th:last-child {
+  width: 168px;
+}
+
+.figmaScoreboardPanel .scoreboardTable td,
+.figmaScoreboardPanel .scoreboardTable th {
+  height: 60px;
+}
+
+.figmaScoreboardPanel .scoreboardTable thead td,
+.figmaScoreboardPanel .scoreboardTable thead th {
+  height: 48px;
+}
+
+.figmaScoreboardPanel .resultCell {
+  min-width: 34px;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--figma-black);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.figmaScoreboardPanel .resultCell.solved {
+  background: #ddfbe8;
+}
+
+.figmaScoreboardPanel .resultCell.failed {
+  background: #ffeaea;
+}
+
+.figmaScoreboardPanel .resultCell.empty {
+  background: transparent;
+}
+
+.problemLayout {
+  max-width: 1560px;
+  padding: 105px 0 80px;
+  grid-template-columns: 240px minmax(0, 780px) minmax(340px, 380px);
+  gap: 0;
+  color: var(--figma-black);
+}
+
+.problemWorkspaceBar {
+  border: 0;
+  background: transparent;
+  padding: 0 0 28px;
+}
+
+.problemWorkspaceBar .viewSwitch {
+  gap: 10px;
+  background: transparent;
+  padding: 0;
+}
+
+.submitAvailability {
+  display: none;
+}
+
+.problemNav,
+.statementPanel,
+.submitPanel {
+  border-color: var(--figma-stroke);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.problemNav {
+  top: 100px;
+  min-height: 2000px;
+  border-radius: 12px 0 0 12px;
+  padding: 14px 10px;
+}
+
+.problemNav .panelTitle {
+  display: none;
+}
+
+.problemNav button {
+  min-height: 39px;
+  border-radius: 5px;
+  padding: 10px;
+  color: var(--figma-black);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.problemNav button.active {
+  background: var(--figma-black);
+  color: #fff;
+}
+
+.problemNav .problemSolveBadge {
+  display: none;
+}
+
+.problemNavLabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statementPanel {
+  min-height: 2000px;
+  padding: 24px 29px;
+  border-left: 0;
+}
+
+.statementPanel h1 {
+  margin: 0 0 20px;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.limitBar {
+  margin: 0 0 30px;
+  gap: 10px;
+}
+
+.limitBar span {
+  min-height: 32px;
+  padding: 5px 17px;
+  background: #f0f3f6;
+  color: var(--figma-black);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.markdownPreview {
+  color: var(--figma-black);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.statementSection {
+  margin-top: 50px;
+}
+
+.statementSection h2 {
+  margin-bottom: 15px;
+  font-size: 28px;
+  line-height: 1.4;
+}
+
+.exampleGrid {
+  grid-template-columns: repeat(2, minmax(0, 345px));
+  gap: 30px;
+  margin-top: 30px;
+}
+
+.exampleGrid > div {
+  border: 1px solid var(--figma-stroke);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.exampleHeader {
+  min-height: 45px;
+  border-radius: 0;
+  background: #f0f3f6;
+  padding: 0 14px 0 19px;
+  color: #12171f;
+  font-size: 15px;
+}
+
+.exampleHeader + pre {
+  border: 0;
+  border-radius: 0;
+  padding: 14px 19px;
+  color: #12171f;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.submitPanel {
+  top: 100px;
+  min-height: 2000px;
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  padding: 24px 20px;
+}
+
+.submitPanel .panelTitle {
+  margin-bottom: 12px;
+}
+
+.submitPanel .panelTitle svg {
+  display: none;
+}
+
+.submitPanel .panelTitle h2 {
+  font-size: 32px;
+  line-height: 1.4;
+}
+
+.submitPanel select {
+  height: 45px;
+  border-color: var(--figma-stroke);
+  border-radius: 999px;
+  padding: 0 17px;
+  color: var(--figma-black);
+  font-size: 15px;
+}
+
+.monacoShell,
+.monacoMount,
+.codeEditor {
+  min-height: 560px;
+}
+
+.monacoShell {
+  border-color: #dadde5;
+  border-radius: 20px;
+  background: #fcfcfd;
+}
+
+.submitPanel > button {
+  min-height: 40px;
+  width: 300px;
+  justify-self: center;
+  border-radius: 5px;
+  background: var(--figma-black);
+  color: #fff;
+  font-size: 14px;
+}
+
+@media (max-width: 1180px) {
+  .figmaContestPage,
+  .problemLayout {
+    width: calc(100vw - 32px);
+    padding: 48px 0;
+  }
+
+  .figmaOverviewCards {
+    grid-template-columns: 1fr;
+  }
+
+  .figmaOverviewCard {
+    width: 100%;
+    height: auto;
+    min-height: 220px;
+  }
+
+  .problemLayout,
+  .problemLayout.focusStatement,
+  .problemLayout.focusSubmit {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .problemNav,
+  .statementPanel,
+  .submitPanel {
+    position: static;
+    min-height: auto;
+    border: 1px solid var(--figma-stroke);
+    border-radius: 12px;
+  }
+
+  .exampleGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .unifiedShell.mode-service {
   background: #f3f5f8;
 }
@@ -5069,4 +5705,1374 @@ body {
 .staffTopbar .staffNav button {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+/* Final participant contest overrides for Figma parity. Kept last to beat legacy responsive blocks. */
+.unifiedShell.mode-participant {
+  background: #fff;
+}
+
+.unifiedShell.mode-participant .unifiedContent {
+  max-width: none;
+}
+
+.unifiedShell.mode-participant .topbar.contestTopbar {
+  min-height: 80px;
+  border-bottom: 0;
+  background: #fff;
+  padding: 0 32px;
+}
+
+.unifiedShell.mode-participant .problemLayout {
+  width: min(1560px, calc(100vw - 48px));
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 105px 0 80px;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 780px) minmax(340px, 380px);
+  gap: 0;
+  color: var(--figma-black);
+}
+
+.unifiedShell.mode-participant .problemLayout.focusStatement {
+  grid-template-columns: 240px minmax(0, 1160px);
+}
+
+.unifiedShell.mode-participant .problemLayout.focusSubmit {
+  grid-template-columns: 240px minmax(340px, 380px);
+}
+
+.unifiedShell.mode-participant .problemNav {
+  width: 240px;
+  max-width: 240px;
+}
+
+.unifiedShell.mode-participant .submitPanel {
+  width: 100%;
+  max-width: 380px;
+}
+
+.unifiedShell.mode-participant .problemWorkspaceBar {
+  grid-column: 1 / -1;
+  border: 0;
+  background: transparent;
+  padding: 0 0 28px;
+}
+
+.unifiedShell.mode-participant .problemNav,
+.unifiedShell.mode-participant .statementPanel,
+.unifiedShell.mode-participant .submitPanel {
+  border-color: var(--figma-stroke);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.unifiedShell.mode-participant .problemNav {
+  grid-column: auto;
+  position: sticky;
+  top: 100px;
+  min-height: 2000px;
+  border-radius: 12px 0 0 12px;
+  padding: 14px 10px;
+}
+
+.unifiedShell.mode-participant .statementPanel {
+  min-height: 2000px;
+  padding: 24px 29px;
+  border-left: 0;
+}
+
+.unifiedShell.mode-participant .submitPanel {
+  display: grid;
+  position: sticky;
+  top: 100px;
+  min-height: 2000px;
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  padding: 24px 20px;
+}
+
+.unifiedShell.mode-participant .problemLayout.focusStatement .submitPanel,
+.unifiedShell.mode-participant .problemLayout.focusSubmit .statementPanel {
+  display: none;
+}
+
+.unifiedShell.mode-participant .problemLayout:not(.focusStatement):not(.focusSubmit):not(.readonlyProblemLayout) .statementPanel,
+.unifiedShell.mode-participant .problemLayout:not(.focusStatement):not(.focusSubmit) .submitPanel {
+  position: sticky;
+}
+
+@media (max-width: 1180px) {
+  .unifiedShell.mode-participant .problemLayout,
+  .unifiedShell.mode-participant .problemLayout.focusStatement,
+  .unifiedShell.mode-participant .problemLayout.focusSubmit {
+    width: calc(100vw - 32px);
+    padding: 48px 0;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .unifiedShell.mode-participant .problemNav,
+  .unifiedShell.mode-participant .statementPanel,
+  .unifiedShell.mode-participant .submitPanel {
+    position: static;
+    min-height: auto;
+    border: 1px solid var(--figma-stroke);
+    border-radius: 12px;
+  }
+}
+
+/* Participant Figma polish: fixed ratios, no clipping, unified contest subpages. */
+.unifiedShell.mode-participant .figmaContestPage {
+  width: min(1400px, calc(100vw - 48px));
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 105px 0 80px;
+}
+
+.unifiedShell.mode-participant .figmaOverviewCard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.unifiedShell.mode-participant .figmaOverviewIcon {
+  flex: 0 0 auto;
+  margin-bottom: 126px;
+}
+
+.unifiedShell.mode-participant .figmaOverviewCard strong,
+.unifiedShell.mode-participant .figmaOverviewCard p {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unifiedShell.mode-participant .figmaOverviewCard p {
+  margin: 0;
+}
+
+.unifiedShell.mode-participant .figmaTablePanel {
+  width: 100%;
+  min-width: 0;
+}
+
+.unifiedShell.mode-participant .figmaProblemsetPanel table,
+.unifiedShell.mode-participant .figmaSubmissionsPanel table {
+  width: 1400px;
+  min-width: 1400px;
+  table-layout: fixed;
+}
+
+.unifiedShell.mode-participant .figmaProblemsetPanel th:nth-child(1),
+.unifiedShell.mode-participant .figmaProblemsetPanel td:nth-child(1) {
+  width: 120px;
+}
+
+.unifiedShell.mode-participant .figmaProblemsetPanel th:nth-child(2),
+.unifiedShell.mode-participant .figmaProblemsetPanel td:nth-child(2) {
+  width: 660px;
+}
+
+.unifiedShell.mode-participant .figmaProblemsetPanel th:nth-child(3),
+.unifiedShell.mode-participant .figmaProblemsetPanel td:nth-child(3) {
+  width: 240px;
+}
+
+.unifiedShell.mode-participant .figmaProblemsetPanel th:nth-child(4),
+.unifiedShell.mode-participant .figmaProblemsetPanel td:nth-child(4),
+.unifiedShell.mode-participant .figmaProblemsetPanel th:nth-child(5),
+.unifiedShell.mode-participant .figmaProblemsetPanel td:nth-child(5) {
+  width: 130px;
+}
+
+.unifiedShell.mode-participant .figmaProblemsetPanel th:nth-child(6),
+.unifiedShell.mode-participant .figmaProblemsetPanel td:nth-child(6) {
+  width: 120px;
+}
+
+.unifiedShell.mode-participant .figmaSubmissionsPanel th:nth-child(1),
+.unifiedShell.mode-participant .figmaSubmissionsPanel td:nth-child(1) {
+  width: 120px;
+}
+
+.unifiedShell.mode-participant .figmaSubmissionsPanel th:nth-child(2),
+.unifiedShell.mode-participant .figmaSubmissionsPanel td:nth-child(2) {
+  width: 140px;
+}
+
+.unifiedShell.mode-participant .figmaSubmissionsPanel th:nth-child(3),
+.unifiedShell.mode-participant .figmaSubmissionsPanel td:nth-child(3),
+.unifiedShell.mode-participant .figmaSubmissionsPanel th:nth-child(5),
+.unifiedShell.mode-participant .figmaSubmissionsPanel td:nth-child(5),
+.unifiedShell.mode-participant .figmaSubmissionsPanel th:nth-child(6),
+.unifiedShell.mode-participant .figmaSubmissionsPanel td:nth-child(6) {
+  width: 100px;
+}
+
+.unifiedShell.mode-participant .figmaSubmissionsPanel th:nth-child(4),
+.unifiedShell.mode-participant .figmaSubmissionsPanel td:nth-child(4) {
+  width: 300px;
+}
+
+.unifiedShell.mode-participant .figmaSubmissionsPanel th:nth-child(7),
+.unifiedShell.mode-participant .figmaSubmissionsPanel td:nth-child(7) {
+  width: 170px;
+}
+
+.unifiedShell.mode-participant .figmaSubmissionsPanel th:nth-child(8),
+.unifiedShell.mode-participant .figmaSubmissionsPanel td:nth-child(8) {
+  width: 120px;
+}
+
+.unifiedShell.mode-participant .figmaSubmissionsPanel th:nth-child(9),
+.unifiedShell.mode-participant .figmaSubmissionsPanel td:nth-child(9) {
+  width: 250px;
+}
+
+.unifiedShell.mode-participant .figmaTablePanel td,
+.unifiedShell.mode-participant .figmaTablePanel th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.unifiedShell.mode-participant .simplePagination {
+  display: flex;
+  justify-content: center;
+  gap: 25px;
+  margin: 96px 0 0;
+}
+
+.unifiedShell.mode-participant .simplePagination button {
+  min-width: auto;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #000;
+  font-size: 14px;
+}
+
+.unifiedShell.mode-participant .simplePagination button:first-child,
+.unifiedShell.mode-participant .simplePagination button:last-child {
+  display: none;
+}
+
+.unifiedShell.mode-participant .simplePagination button.active {
+  background: transparent;
+  color: #000;
+  text-decoration: underline;
+}
+
+.unifiedShell.mode-participant .problemLayout {
+  width: min(1400px, calc(100vw - 48px));
+  max-width: 1400px;
+  grid-template-columns: 240px minmax(0, 780px) minmax(340px, 380px);
+}
+
+.unifiedShell.mode-participant .problemLayout.focusStatement,
+.unifiedShell.mode-participant .readonlyProblemLayout,
+.unifiedShell.mode-participant .readonlyProblemLayout.focusStatement,
+.unifiedShell.mode-participant .readonlyProblemLayout.focusSubmit {
+  grid-template-columns: 240px minmax(0, 1160px);
+}
+
+.unifiedShell.mode-participant .problemLayout.focusSubmit {
+  grid-template-columns: 240px minmax(340px, 380px);
+}
+
+.unifiedShell.mode-participant .problemLayout.focusStatement .statementPanel,
+.unifiedShell.mode-participant .readonlyProblemLayout .statementPanel {
+  max-width: none;
+}
+
+.unifiedShell.mode-participant .problemLayout:not(.focusStatement):not(.focusSubmit):not(.readonlyProblemLayout) .statementPanel {
+  max-width: 780px;
+}
+
+.unifiedShell.mode-participant .problemLayout:not(.focusStatement):not(.focusSubmit) .submitPanel {
+  max-width: 380px;
+}
+
+.unifiedShell.mode-participant .monacoShell,
+.unifiedShell.mode-participant .monacoMount,
+.unifiedShell.mode-participant .codeEditor {
+  min-height: 560px;
+  height: 560px;
+}
+
+.unifiedShell.mode-participant .figmaNoticeSummary,
+.unifiedShell.mode-participant .figmaBoardPanel,
+.unifiedShell.mode-participant .accessGate.panel,
+.unifiedShell.mode-participant .loginCard {
+  border: 1px solid var(--figma-stroke);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.unifiedShell.mode-participant .figmaNoticeSummary,
+.unifiedShell.mode-participant .figmaBoardPanel {
+  padding: 18px;
+}
+
+.unifiedShell.mode-participant .boardTabs {
+  width: fit-content;
+}
+
+.unifiedShell.mode-participant .boardTabs button {
+  min-height: 32px;
+  border: 1px solid var(--figma-stroke);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--figma-black);
+  padding: 5px 17px;
+}
+
+.unifiedShell.mode-participant .boardTabs button.active {
+  border-color: var(--figma-black);
+  background: var(--figma-black);
+  color: #fff;
+}
+
+.unifiedShell.mode-participant .boardThreadCard,
+.unifiedShell.mode-participant .boardReplyCard,
+.unifiedShell.mode-participant .boardEmpty,
+.unifiedShell.mode-participant .boardComposerCard.compact,
+.unifiedShell.mode-participant .boardFocusHeader {
+  border-color: var(--figma-stroke);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+.unifiedShell.mode-participant .boardAvatar {
+  border-radius: 999px;
+  background: #eeeaff;
+  color: var(--figma-purple);
+}
+
+.unifiedShell.mode-participant .submitPanel > button,
+.unifiedShell.mode-participant .loginCard > button,
+.unifiedShell.mode-participant .boardComposerCard .buttonRow button:not(.secondary),
+.unifiedShell.mode-participant .figmaBoardPanel .tableActions button:not(.secondary),
+.unifiedShell.mode-participant .accessGate .buttonRow button:not(.secondary) {
+  border-radius: 5px;
+  background: var(--figma-black);
+}
+
+.unifiedShell.mode-participant button.secondary,
+.unifiedShell.mode-participant .buttonRow button.secondary {
+  border: 1px solid var(--figma-stroke);
+  background: #fff;
+  color: var(--figma-black);
+}
+
+.unifiedShell.mode-participant .simplePagination button.secondary {
+  border: 0;
+  background: transparent;
+  color: #000;
+}
+
+.unifiedShell.mode-participant input,
+.unifiedShell.mode-participant select,
+.unifiedShell.mode-participant textarea {
+  border-color: var(--figma-stroke);
+  border-radius: 5px;
+}
+
+.unifiedShell.mode-participant .loginPage {
+  min-height: calc(100vh - 80px);
+  padding: 105px 24px 80px;
+}
+
+.unifiedShell.mode-participant .loginCard {
+  width: min(520px, 100%);
+  padding: 28px;
+}
+
+.unifiedShell.mode-participant .loginCard h1,
+.unifiedShell.mode-participant .accessGate h1 {
+  color: var(--figma-black);
+  font-size: 40px;
+  line-height: 1.4;
+}
+
+.unifiedShell.mode-participant .loginCard p,
+.unifiedShell.mode-participant .accessGate p {
+  color: var(--figma-muted);
+}
+
+@media (max-width: 1180px) {
+  .unifiedShell.mode-participant .figmaContestPage,
+  .unifiedShell.mode-participant .problemLayout,
+  .unifiedShell.mode-participant .problemLayout.focusStatement,
+  .unifiedShell.mode-participant .problemLayout.focusSubmit,
+  .unifiedShell.mode-participant .readonlyProblemLayout {
+    width: calc(100vw - 32px);
+    padding-top: 48px;
+    grid-template-columns: 1fr;
+  }
+
+  .unifiedShell.mode-participant .figmaOverviewCards {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .unifiedShell.mode-participant .figmaOverviewIcon {
+    margin-bottom: 48px;
+  }
+
+  .unifiedShell.mode-participant .problemNav,
+  .unifiedShell.mode-participant .submitPanel {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+/* Unified responsive UI layer */
+:root {
+  --zoj-bg: #f6f7fb;
+  --zoj-surface: #ffffff;
+  --zoj-surface-soft: #fbfcfe;
+  --zoj-text: #1b1920;
+  --zoj-muted: #71707a;
+  --zoj-border: #e4e4e8;
+  --zoj-primary: #6f5cff;
+  --zoj-primary-dark: #5142b8;
+  --zoj-primary-soft: #f0edff;
+  --zoj-success: #0f9f6e;
+  --zoj-danger: #d9485f;
+  --zoj-radius: 10px;
+  --zoj-shadow: 0 18px 45px rgba(27, 25, 32, 0.08);
+}
+
+html,
+body {
+  background: var(--zoj-bg);
+}
+
+body {
+  color: var(--zoj-text);
+}
+
+main.publicShell,
+.unifiedShell {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--zoj-bg);
+}
+
+.unifiedContent {
+  width: min(1440px, calc(100vw - 40px));
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.pageGrid,
+.figmaContestPage,
+.unifiedShell.mode-participant .figmaContestPage {
+  width: 100%;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: clamp(24px, 4vw, 56px) 0 clamp(40px, 5vw, 72px);
+  gap: 18px;
+}
+
+.topbar,
+.contestTopbar,
+.staffTopbar,
+.unifiedShell.mode-participant .topbar.contestTopbar,
+.unifiedShell.mode-participant .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  min-height: 72px;
+  width: 100%;
+  padding: 12px clamp(16px, 3vw, 32px);
+  border: 0;
+  border-bottom: 1px solid rgba(228, 228, 232, 0.9);
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 8px 30px rgba(27, 25, 32, 0.06);
+  backdrop-filter: blur(16px);
+}
+
+.brandButton,
+.contestTopbar .brandButton {
+  color: var(--zoj-text);
+  gap: 10px;
+}
+
+.brandMark,
+.contestTopbar .brandMark {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--zoj-primary);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 0;
+  box-shadow: none;
+}
+
+.brandMark::after {
+  content: "Z";
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.brandButton strong,
+.zojWordmark {
+  color: var(--zoj-text);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.brandButton small,
+.compactBrand small,
+.contestTopbar .compactBrand small {
+  display: block;
+  color: var(--zoj-muted);
+  font-size: 12px;
+}
+
+nav,
+.contestNav,
+.staffNav,
+.unifiedShell.mode-participant .contestTopbar .contestNav {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.navGroup,
+.staffTopbar .staffNav .navGroup {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+
+.navDivider,
+.staffTopbar .staffNav .navDivider {
+  flex: 0 0 auto;
+  width: 1px;
+  min-height: 28px;
+  background: var(--zoj-border);
+  margin: 0 6px;
+}
+
+nav button,
+.staffNav button,
+.contestNav button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: #4b4a55;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+nav button:hover:not(:disabled),
+.staffNav button:hover:not(:disabled),
+.contestNav button:hover:not(:disabled) {
+  border-color: var(--zoj-border);
+  background: #fff;
+}
+
+nav button.active,
+.staffNav button.active,
+.contestNav button.active {
+  border-color: var(--zoj-text);
+  background: var(--zoj-text);
+  color: #fff;
+}
+
+.topbarActions,
+.profileChip,
+.contestTopbar .profileChip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.contestTopbar .profileChip > span:not(.profileAvatar),
+.contestTopbar .profileAvatar {
+  display: grid;
+}
+
+.profileAvatar,
+.contestTopbar .profileAvatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--zoj-primary-soft);
+  color: var(--zoj-primary-dark);
+  place-items: center;
+  font-weight: 800;
+}
+
+.profileChip strong,
+.profileChip small {
+  max-width: 190px;
+}
+
+.sectionTag {
+  border-color: var(--zoj-border);
+  background: #fff;
+  color: var(--zoj-muted);
+}
+
+.topbar .textButton,
+.contestTopbar .textButton,
+.staffTopbar .textButton {
+  min-height: 34px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--zoj-primary-dark);
+  background: #fff;
+  font-weight: 800;
+}
+
+.figmaContestTabs {
+  display: none;
+}
+
+.pageHeader,
+.figmaPageHeader {
+  gap: 6px;
+}
+
+.pageHeader .eyebrow {
+  display: none;
+}
+
+.pageHeader h1,
+.figmaPageHeader h1,
+.loginCard h1,
+.statementPanel h1 {
+  margin: 0;
+  color: var(--zoj-text);
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.pageHeader p,
+.figmaPageHeader p {
+  margin: 0;
+  color: var(--zoj-muted);
+  font-size: clamp(15px, 2vw, 18px);
+  line-height: 1.6;
+}
+
+.panel,
+.infoCard,
+.contestCard,
+.statementPanel,
+.submitPanel,
+.problemNav,
+.figmaOverviewCard,
+.figmaTablePanel,
+.figmaNoticeSummary,
+.figmaBoardPanel,
+.loginCard,
+.accessGate.panel {
+  border: 1px solid var(--zoj-border);
+  border-radius: var(--zoj-radius);
+  background: var(--zoj-surface);
+  box-shadow: none;
+}
+
+.panel,
+.figmaNoticeSummary,
+.figmaBoardPanel {
+  padding: clamp(16px, 2vw, 22px);
+}
+
+.summaryGrid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+.infoCard {
+  min-height: 124px;
+  padding: 18px;
+}
+
+.infoCard svg,
+.panelTitle svg,
+.feature svg {
+  color: var(--zoj-primary);
+}
+
+.infoCard strong {
+  color: var(--zoj-text);
+  font-size: clamp(22px, 3vw, 30px);
+}
+
+.infoCard span,
+.infoCard p,
+.panelNote,
+.mutedText {
+  color: var(--zoj-muted);
+}
+
+button,
+.submitPanel > button,
+.loginCard > button,
+.boardComposerCard .buttonRow button:not(.secondary),
+.figmaBoardPanel .tableActions button:not(.secondary),
+.accessGate .buttonRow button:not(.secondary) {
+  border-radius: 8px;
+  background: var(--zoj-primary);
+  color: #fff;
+}
+
+button.secondary,
+button.textButton,
+.buttonRow button.secondary,
+.unifiedShell.mode-participant button.secondary,
+.unifiedShell.mode-participant .buttonRow button.secondary {
+  border: 1px solid var(--zoj-border);
+  background: #fff;
+  color: var(--zoj-text);
+}
+
+input,
+select,
+textarea,
+.unifiedShell.mode-participant input,
+.unifiedShell.mode-participant select,
+.unifiedShell.mode-participant textarea {
+  border-color: #d7d8df;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.figmaOverviewCards {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.figmaOverviewCard,
+.unifiedShell.mode-participant .figmaOverviewCard {
+  height: auto;
+  min-height: 190px;
+  padding: clamp(18px, 2.5vw, 28px);
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  overflow: visible;
+}
+
+.figmaOverviewIcon,
+.unifiedShell.mode-participant .figmaOverviewIcon {
+  margin-bottom: clamp(32px, 6vw, 72px);
+  background: var(--zoj-primary-soft);
+  color: var(--zoj-primary);
+}
+
+.figmaOverviewCard strong,
+.unifiedShell.mode-participant .figmaOverviewCard strong {
+  font-size: clamp(24px, 3vw, 32px);
+}
+
+.figmaOverviewCard p,
+.unifiedShell.mode-participant .figmaOverviewCard p {
+  margin: 0;
+  color: var(--zoj-muted);
+  font-size: clamp(16px, 2vw, 20px);
+  white-space: normal;
+}
+
+.figmaTablePanel,
+.unifiedShell.mode-participant .figmaTablePanel {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.figmaTablePanel table,
+.unifiedShell.mode-participant .figmaProblemsetPanel table,
+.unifiedShell.mode-participant .figmaSubmissionsPanel table,
+.scoreboardTable {
+  width: 100%;
+  min-width: 860px;
+  table-layout: auto;
+}
+
+.figmaScoreboardPanel .scoreboardTable {
+  min-width: 980px;
+}
+
+.figmaTablePanel th,
+.figmaTablePanel td,
+.figmaScoreboardPanel .scoreboardTable th,
+.figmaScoreboardPanel .scoreboardTable td {
+  height: 48px;
+  padding: 0 14px;
+  border-color: var(--zoj-border);
+}
+
+.figmaTablePanel tbody tr:nth-child(odd) td,
+.figmaScoreboardPanel .scoreboardTable tbody tr:nth-child(odd) td {
+  background: var(--zoj-surface-soft);
+}
+
+.problemLayout,
+.unifiedShell.mode-participant .problemLayout,
+.problemLayout.focusStatement,
+.problemLayout.focusSubmit,
+.readonlyProblemLayout,
+.readonlyProblemLayout.focusStatement,
+.readonlyProblemLayout.focusSubmit,
+.unifiedShell.mode-participant .problemLayout.focusStatement,
+.unifiedShell.mode-participant .problemLayout.focusSubmit,
+.unifiedShell.mode-participant .readonlyProblemLayout {
+  width: min(1440px, calc(100vw - 40px));
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: clamp(24px, 4vw, 56px) 0 clamp(40px, 5vw, 72px);
+  display: grid;
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr) minmax(310px, 380px);
+  gap: 16px;
+  justify-content: stretch;
+}
+
+.problemLayout.focusStatement,
+.readonlyProblemLayout,
+.readonlyProblemLayout.focusStatement,
+.readonlyProblemLayout.focusSubmit,
+.unifiedShell.mode-participant .problemLayout.focusStatement,
+.unifiedShell.mode-participant .readonlyProblemLayout {
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+}
+
+.problemLayout.focusSubmit,
+.unifiedShell.mode-participant .problemLayout.focusSubmit {
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+}
+
+.problemWorkspaceBar,
+.unifiedShell.mode-participant .problemWorkspaceBar {
+  grid-column: 1 / -1;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.problemWorkspaceBar .viewSwitch {
+  background: #ebeef5;
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.problemWorkspaceBar .viewSwitch button,
+.figmaContestPage .segmented button,
+.boardTabs button {
+  min-height: 34px;
+  border-radius: 999px;
+  border: 0;
+  background: transparent;
+  color: #4b4a55;
+}
+
+.problemWorkspaceBar .viewSwitch button.active,
+.figmaContestPage .segmented button.active,
+.boardTabs button.active {
+  background: var(--zoj-text);
+  color: #fff;
+}
+
+.problemNav,
+.unifiedShell.mode-participant .problemNav,
+.statementPanel,
+.unifiedShell.mode-participant .statementPanel,
+.submitPanel,
+.unifiedShell.mode-participant .submitPanel {
+  position: sticky;
+  top: 96px;
+  min-height: 0;
+  width: auto;
+  max-width: none;
+  border-radius: var(--zoj-radius);
+  border: 1px solid var(--zoj-border);
+}
+
+.problemNav {
+  padding: 14px;
+  align-self: start;
+}
+
+.problemNav .panelTitle {
+  display: none;
+}
+
+.problemNav button {
+  min-height: 38px;
+  border-radius: 8px;
+  padding: 9px 10px;
+}
+
+.problemNav button.active {
+  background: var(--zoj-text);
+  color: #fff;
+}
+
+.statementPanel,
+.unifiedShell.mode-participant .statementPanel {
+  padding: clamp(18px, 3vw, 32px);
+}
+
+.submitPanel,
+.unifiedShell.mode-participant .submitPanel {
+  display: grid;
+  gap: 12px;
+  padding: 18px;
+}
+
+.submitPanel .panelTitle h2 {
+  font-size: 24px;
+}
+
+.monacoShell,
+.monacoMount,
+.codeEditor,
+.unifiedShell.mode-participant .monacoShell,
+.unifiedShell.mode-participant .monacoMount,
+.unifiedShell.mode-participant .codeEditor {
+  min-height: min(56vh, 560px);
+  height: min(56vh, 560px);
+}
+
+.submitPanel > button,
+.unifiedShell.mode-participant .submitPanel > button {
+  width: 100%;
+  justify-self: stretch;
+}
+
+.exampleGrid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.simplePagination,
+.unifiedShell.mode-participant .simplePagination {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin: 18px 0 0;
+}
+
+.simplePagination button,
+.unifiedShell.mode-participant .simplePagination button,
+.unifiedShell.mode-participant .simplePagination button.secondary {
+  min-width: 34px;
+  min-height: 32px;
+  border: 1px solid var(--zoj-border);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--zoj-text);
+  padding: 0 10px;
+}
+
+.simplePagination button:first-child,
+.simplePagination button:last-child,
+.unifiedShell.mode-participant .simplePagination button:first-child,
+.unifiedShell.mode-participant .simplePagination button:last-child {
+  display: inline-flex;
+}
+
+.simplePagination button.active,
+.unifiedShell.mode-participant .simplePagination button.active {
+  border-color: var(--zoj-text);
+  background: var(--zoj-text);
+  color: #fff;
+  text-decoration: none;
+}
+
+.loginPage,
+.unifiedShell.mode-participant .loginPage {
+  min-height: calc(100vh - 72px);
+  padding: clamp(32px, 6vw, 72px) 20px;
+}
+
+.loginCard,
+.unifiedShell.mode-participant .loginCard {
+  width: min(520px, 100%);
+  padding: clamp(22px, 4vw, 32px);
+}
+
+.boardThreadCard,
+.boardReplyCard,
+.boardEmpty,
+.boardComposerCard.compact,
+.boardFocusHeader {
+  border-radius: var(--zoj-radius);
+  border-color: var(--zoj-border);
+}
+
+@media (max-width: 1180px) {
+  .topbar,
+  .contestTopbar,
+  .staffTopbar,
+  .unifiedShell.mode-participant .topbar.contestTopbar {
+    align-items: flex-start;
+  }
+
+  .brandButton {
+    flex: 0 0 auto;
+  }
+
+  nav,
+  .contestNav,
+  .staffNav {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .profileChip,
+  .topbarActions {
+    margin-left: auto;
+  }
+
+  .problemLayout,
+  .unifiedShell.mode-participant .problemLayout,
+  .problemLayout.focusStatement,
+  .problemLayout.focusSubmit,
+  .readonlyProblemLayout,
+  .unifiedShell.mode-participant .readonlyProblemLayout {
+    width: min(100%, calc(100vw - 32px));
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .problemLayout:not(.focusStatement):not(.focusSubmit):not(.readonlyProblemLayout) .submitPanel {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 820px) {
+  .unifiedContent {
+    width: min(100%, calc(100vw - 24px));
+  }
+
+  .topbar,
+  .contestTopbar,
+  .staffTopbar,
+  .unifiedShell.mode-participant .topbar.contestTopbar {
+    padding: 10px 12px;
+  }
+
+  .brandButton small,
+  .profileChip small,
+  .sectionTag,
+  .navDivider {
+    display: none;
+  }
+
+  .profileChip strong {
+    max-width: 110px;
+  }
+
+  nav button,
+  .staffNav button,
+  .contestNav button {
+    min-height: 34px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .pageGrid,
+  .figmaContestPage,
+  .unifiedShell.mode-participant .figmaContestPage,
+  .problemLayout,
+  .unifiedShell.mode-participant .problemLayout,
+  .problemLayout.focusStatement,
+  .problemLayout.focusSubmit,
+  .readonlyProblemLayout,
+  .unifiedShell.mode-participant .readonlyProblemLayout {
+    width: 100%;
+    padding: 22px 0 44px;
+    grid-template-columns: 1fr;
+  }
+
+  .problemNav,
+  .unifiedShell.mode-participant .problemNav,
+  .statementPanel,
+  .unifiedShell.mode-participant .statementPanel,
+  .submitPanel,
+  .unifiedShell.mode-participant .submitPanel {
+    position: static;
+    grid-column: auto;
+    width: 100%;
+  }
+
+  .problemLayout:not(.focusStatement):not(.focusSubmit):not(.readonlyProblemLayout) .submitPanel {
+    grid-column: auto;
+  }
+
+  .figmaTablePanel table,
+  .unifiedShell.mode-participant .figmaProblemsetPanel table,
+  .unifiedShell.mode-participant .figmaSubmissionsPanel table,
+  .scoreboardTable {
+    min-width: 760px;
+  }
+}
+
+/* Header cleanup: compact status rows and stable wordmark */
+.brandButton > span:last-child,
+.compactBrand > span:last-child,
+.contestTopbar .brandButton > span:last-child,
+.staffTopbar .brandButton > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: clamp(180px, 22vw, 320px);
+  text-align: left;
+}
+
+.zojWordmark {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--zoj-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noticeTicker {
+  min-height: 34px;
+  max-height: 38px;
+  padding: 0 16px;
+  gap: 8px;
+}
+
+.noticeTickerTrack {
+  min-height: 34px;
+}
+
+.noticeTickerTrack span {
+  max-height: 34px;
+  font-size: 13px;
+  line-height: 34px;
+}
+
+.noticeTickerClose {
+  width: 26px;
+  min-height: 26px;
+  height: 26px;
+}
+
+.apiBanner {
+  min-height: 34px;
+  height: 34px;
+  padding: 0 16px;
+  border: 0;
+  border-bottom: 1px solid var(--zoj-border);
+  background: #fff8e6;
+  color: #7a4b00;
+  font-size: 13px;
+  line-height: 34px;
+}
+
+.apiBanner.offline {
+  background: #fff1f0;
+  color: #9f231b;
+}
+
+.apiBanner .dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+}
+
+/* Stable one-line top navigation across all pages. */
+.topbar,
+.contestTopbar,
+.staffTopbar,
+.unifiedShell.mode-participant .topbar,
+.unifiedShell.mode-participant .topbar.contestTopbar,
+.unifiedShell.mode-operator .topbar {
+  height: 72px;
+  min-height: 72px;
+  max-height: 72px;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  overflow: hidden;
+  gap: 14px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.contestBrandGroup {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: auto;
+}
+
+.brandButton,
+.contestTopbar .brandButton,
+.staffTopbar .brandButton {
+  flex: 0 0 auto;
+  min-height: 44px;
+  max-width: min(320px, 26vw);
+  overflow: hidden;
+}
+
+.brandButton > span:last-child,
+.compactBrand > span:last-child,
+.contestTopbar .brandButton > span:last-child,
+.staffTopbar .brandButton > span:last-child {
+  max-width: 100%;
+}
+
+nav,
+.contestNav,
+.staffNav,
+.unifiedShell.mode-participant .contestTopbar .contestNav {
+  order: 0;
+  width: auto;
+  min-width: 0;
+  height: 44px;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  align-content: center;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.navGroup,
+.staffTopbar .staffNav .navGroup {
+  height: 44px;
+  align-items: center;
+}
+
+.navDivider,
+.staffTopbar .staffNav .navDivider {
+  align-self: center;
+  height: 28px;
+  min-height: 28px;
+}
+
+.profileChip,
+.topbarActions,
+.contestTopbar .profileChip {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  max-width: min(360px, 28vw);
+  margin-left: 0;
+  border-top: 0;
+  padding-top: 0;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.profileChip > span:last-of-type {
+  min-width: 0;
+}
+
+.profileChip strong,
+.profileChip small {
+  max-width: 170px;
+}
+
+@media (max-width: 980px) {
+  .topbar,
+  .contestTopbar,
+  .staffTopbar,
+  .unifiedShell.mode-participant .topbar,
+  .unifiedShell.mode-participant .topbar.contestTopbar,
+  .unifiedShell.mode-operator .topbar {
+    height: 64px;
+    min-height: 64px;
+    max-height: 64px;
+    flex-direction: row;
+    align-items: center;
+    padding-left: 12px;
+    padding-right: 12px;
+    gap: 10px;
+  }
+
+  .brandButton,
+  .contestTopbar .brandButton,
+  .staffTopbar .brandButton {
+    max-width: 190px;
+  }
+
+  nav,
+  .contestNav,
+  .staffNav {
+    order: 0;
+    width: auto;
+    height: 40px;
+  }
+
+  .profileChip,
+  .topbarActions,
+  .contestTopbar .profileChip {
+    max-width: 120px;
+  }
+
+  .profileChip > span:last-of-type,
+  .sectionTag {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar,
+  .contestTopbar,
+  .staffTopbar,
+  .unifiedShell.mode-participant .topbar,
+  .unifiedShell.mode-participant .topbar.contestTopbar,
+  .unifiedShell.mode-operator .topbar {
+    height: 60px;
+    min-height: 60px;
+    max-height: 60px;
+  }
+
+  .brandButton,
+  .contestTopbar .brandButton,
+  .staffTopbar .brandButton {
+    max-width: 48px;
+  }
+
+  .brandButton > span:last-child,
+  .compactBrand > span:last-child {
+    display: none;
+  }
+
+  .profileChip,
+  .topbarActions,
+  .contestTopbar .profileChip {
+    max-width: 86px;
+  }
 }
